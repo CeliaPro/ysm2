@@ -1,0 +1,113 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Plus, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export default function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("EMPLOYEE");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Load users from backend (optional, placeholder here)
+    setUsers([
+      { id: "1", name: "Admin User", email: "admin@example.com", role: "ADMIN" },
+      { id: "2", name: "Jane Smith", email: "jane@example.com", role: "EMPLOYEE" },
+    ]);
+  }, []);
+
+  const handleSendInvite = async () => {
+    if (!email) {
+      toast.warning("Veuillez saisir un email.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          invitedByAdminId: "ADMIN_ID", // Replace with current admin ID from session/context
+          role,
+        }),
+      });
+
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(error || "Erreur lors de l'envoi de l'invitation");
+      }
+
+      toast.success("Invitation envoyée avec succès !");
+      setEmail("");
+      setRole("EMPLOYEE");
+    } catch (error: any) {
+      toast.error(`Erreur : ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-4 space-y-6">
+      <h2 className="text-2xl font-bold">Gestion des utilisateurs</h2>
+
+      <Card>
+        <CardContent className="p-4 grid gap-4 md:grid-cols-4">
+          <Input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="border rounded-md px-3 py-2"
+          >
+            <option value="EMPLOYEE">Employé</option>
+            <option value="ADMIN">Administrateur</option>
+          </select>
+          <Button
+            onClick={handleSendInvite}
+            disabled={loading}
+            className="md:col-span-2"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Envoyer une invitation
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {users.map((user) => (
+          <Card key={user.id}>
+            <CardContent className="p-4 space-y-2">
+              <p className="font-semibold">{user.name}</p>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <p className="text-xs text-blue-500 uppercase">{user.role}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
