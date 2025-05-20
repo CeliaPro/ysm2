@@ -3,7 +3,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react'
 import { toast } from 'sonner'
 
 // Define types
-export type UserRole = 'admin' | 'project_manager' | 'employee'
+export type UserRole = 'ADMIN' | 'MANAGER' | 'EMPLOYEE'
 export type ProjectRole = 'owner' | 'editor' | 'viewer'
 
 export interface User {
@@ -32,6 +32,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>
   isAdmin: () => boolean
   isProjectManager: () => boolean
+  redeemInviteToken: (token: string, password: string) => Promise<void>
 }
 
 // Create the context
@@ -81,13 +82,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     setIsLoading(true)
     getUser()
-    .catch(()=>{})
-    .finally(()=>{
-      setIsLoading(false)
-    })
+      .catch(() => {})
+      .finally(() => {
+        setIsLoading(false)
+      })
   }, [])
 
-  const getUser = async() => {
+  const getUser = async () => {
     try {
       const response = await fetch('/api/auth/me', {
         method: 'GET',
@@ -105,43 +106,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const login = async (email: string, password: string) => {
     try {
-          const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          })
-    
-          if (response.ok) {
-            toast.success('Connexion réussie'); //added
-            await getUser()
-          } else {
-            const { message } = await response.json(); //added
-            toast.error('Les mots de passe ne correspondent pas')
-          }
-        } catch (error) {
-          console.error('Échec de connexion:', error)
-        }
-  }
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
- const logout = async () => {
-  try {
-    const res = await fetch('/api/auth/logout', {
-     credentials: 'include',
-    })
-
-    if (!res.ok) {
-      throw new Error('Failed to log out')
+      if (response.ok) {
+        toast.success('Connexion réussie') //added
+        await getUser()
+      } else {
+        const { message } = await response.json() //added
+        toast.error('Les mots de passe ne correspondent pas')
+      }
+    } catch (error) {
+      console.error('Échec de connexion:', error)
     }
-
-    setUser(null)
-    toast.success('Logged out successfully')
-  } catch (error) {
-    console.error('Logout error:', error)
-    toast.error('Logout failed')
   }
-}
-  const register = async (email: string, password: string, name: string) => {
 
+  const logout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', {
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to log out')
+      }
+
+      setUser(null)
+      toast.success('Logged out successfully')
+    } catch (error) {
+      console.error('Logout error:', error)
+      toast.error('Logout failed')
+    }
+  }
+  const register = async (email: string, password: string, name: string) => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 800))
 
@@ -159,9 +159,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  const isAdmin = () => user?.role === 'admin'
+  const isAdmin = () => user?.role === 'ADMIN'
   const isProjectManager = () =>
     user?.role === 'project_manager' || user?.role === 'admin'
+
+  const redeemInviteToken = async (token: string, password: string) => {
+    await fetch('/api/auth/invite/redeem', {
+      method: 'POST',
+      body: JSON.stringify({
+        token,
+        password: password,
+      }),
+    }).then(() => {
+      getUser()
+    })
+  }
 
   return (
     <AuthContext.Provider
@@ -174,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         register,
         isAdmin,
         isProjectManager,
+        redeemInviteToken,
       }}
     >
       {isLoading ? 'loading...' : children}
@@ -182,10 +195,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }
 
 // Hook
-  export const useAuth = (): AuthContextType => {
-    const context = useContext(AuthContext)
-    if (context === undefined) {
-      throw new Error('useAuth must be used within an AuthProvider')
-    }
-    return context
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
   }
+  return context
+}

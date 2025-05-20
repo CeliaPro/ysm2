@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 
-export async function POST() {
+export async function GET() {
   const response = NextResponse.json({ message: 'Déconnexion réussie' })
 
   // Clear the "jwt" cookie by setting it to empty and expired

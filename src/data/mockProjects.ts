@@ -3,7 +3,7 @@ import { Project } from '@/types/project'
 // Mock data
 export const mockProjects: Project[] = [
   {
-    id: '1',
+    id: 'm1',
     name: 'Finance Portal',
     description:
       'Financial documents, reports, and analysis for the finance department.',
@@ -16,7 +16,7 @@ export const mockProjects: Project[] = [
     lastUpdated: new Date(2023, 11, 15),
   },
   {
-    id: '2',
+    id: 'm2',
     name: 'Product Development',
     description:
       'Roadmaps, specifications, and research for product development.',
@@ -29,7 +29,7 @@ export const mockProjects: Project[] = [
     lastUpdated: new Date(2023, 11, 10),
   },
   {
-    id: '3',
+    id: 'm3',
     name: 'Marketing',
     description:
       'Campaign analysis, marketing materials, and performance reports.',
@@ -42,7 +42,7 @@ export const mockProjects: Project[] = [
     lastUpdated: new Date(2023, 11, 5),
   },
   {
-    id: '4',
+    id: 'm4',
     name: 'HR Policies',
     description: 'Employee handbooks, policies, and procedures.',
     documentsCount: 12,

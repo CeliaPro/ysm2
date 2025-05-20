@@ -15,7 +15,6 @@ import {
   LayoutDashboard,
   FileText,
   FolderClosed,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -25,26 +24,8 @@ import { ModeToggle } from '@/components/ui/mode-toggle'
 import Link from 'next/link'
 
 const Navbar: React.FC = () => {
-  const { user,logout, isAdmin, isProjectManager } = useAuth()  //I removed nothing
+  const { user, logout, isAdmin, isProjectManager } = useAuth() //I removed nothing
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
- 
-//   const handleLogout = async () => {
-//   try {
-//     const res = await fetch('/api/auth/logout', {
-//       method: 'GET',
-//       credentials: 'include',
-//     })
-
-//     // if (res.ok) {
-//     //   // Optional: clear any client state or redirect
-//     //   window.location.href = '/' // or router.push('/')
-//     // } else {
-//     //   console.error('Erreur de déconnexion')
-//     // }
-//   } catch (error) {
-//     console.error('Erreur réseau lors de la déconnexion:', error)
-//   }
-// }
 
   const isActive = (path: string) => {
     return false
@@ -64,22 +45,10 @@ const Navbar: React.FC = () => {
       showAlways: true,
     },
     {
-      name: 'Projects',
-      path: '/projects',
-      icon: <FolderClosed className="h-4 w-4 mr-2" />,
-      showAlways: true,
-    },
-    {
-      name: 'Users',
-      path: '/users',
-      icon: <Users className="h-4 w-4 mr-2" />,
-      showIf: isAdmin() || isProjectManager(),
-    },
-    {
       name: 'Settings',
-      path: '/settings',
-      icon: <Settings className="h-4 w-4 mr-2" />,
-      showAlways: true,
+      path: '/users',
+      icon: <FolderClosed className="h-4 w-4 mr-2" />,
+      showIf: isAdmin(),
     },
   ]
 

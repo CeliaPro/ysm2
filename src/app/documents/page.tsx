@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import Navbar from '@/components/Navbar'
 import DocumentCard from '@/components/DocumentCard'
@@ -196,7 +196,7 @@ const mockProjects = [
 
 export default function DocumentsPage() {
   const { isLoading, user } = useAuth()
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments)
+  const [documents, setDocuments] = useState<Document[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
   const [activeProject, setActiveProject] = useState<string>('all')
@@ -212,6 +212,7 @@ export default function DocumentsPage() {
   const [uploadProject, setUploadProject] = useState<string>('')
   const [uploadTags, setUploadTags] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadUser, setUploadUser] = useState<string>('')
 
   // Edit document dialog
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -220,6 +221,62 @@ export default function DocumentsPage() {
   const [editDescription, setEditDescription] = useState('')
   const [editProject, setEditProject] = useState<string>('')
   const [editTags, setEditTags] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  //Users and Projects data
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([])
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+
+  const fetchUsersAndProjects = () => {
+    setLoading(true)
+    Promise.all([
+      fetch('/api/users?minimal=true')
+        .then((res) => res.json())
+        .then((res) => setUsers(res)),
+      fetch('/api/projects?minimal=true')
+        .then((res) => res.json())
+        .then((res) => setProjects(res)),
+    ]).then(() => {
+      setLoading(false)
+    })
+  }
+
+  const fetchDocuments = () => {
+    fetch('/api/documents')
+      .then((res) => res.json())
+      .then((res: any[]) => {
+        const mapRes: Document[] = res.map((dc) => ({
+          id: dc.id,
+          name: dc.name,
+          fileType: dc.type,
+          fileSize: dc.size,
+          fileSizeFormatted: '12.8 MB',
+          projectId: '3',
+          projectName: 'Marketing',
+          uploadedBy: '3',
+          uploadedAt: dc.uploadedAt,
+          updatedAt: new Date(2023, 11, 2),
+          tags: ['design', 'branding'],
+          isStarred: true,
+          description: dc.description,
+          isArchived: false,
+          storageProvider: 's3',
+          s3BucketName: 'company-assets',
+          s3ObjectKey: 'logos/final-2023.png',
+          s3Region: 'us-west-2',
+          contentType: 'image/png',
+          publicUrl: dc.url,
+          accessLevel: 'public',
+          filePath: '/documents/logo-finals.png',
+        }))
+        setDocuments([...mapRes, ...mockDocuments])
+      })
+  }
+
+  useEffect(() => {
+    fetchDocuments()
+    fetchUsersAndProjects()
+  }, [])
 
   if (isLoading) {
     return (
@@ -283,64 +340,79 @@ export default function DocumentsPage() {
   }
 
   const handleUploadDocument = () => {
-    if (!selectedFile) {
-      toast.error('Please select a file')
-      return
-    }
-
-    if (!uploadFileName.trim()) {
-      toast.error('Please enter a file name')
-      return
-    }
-
-    if (!uploadProject) {
-      toast.error('Please select a project')
-      return
-    }
-
-    // Create new document
-    const fileExtension = selectedFile.name.split('.').pop() || ''
-    const selectedProjectObj = mockProjects.find((p) => p.id === uploadProject)
-
-    const newDocument: Document = {
-      id: `doc-${Date.now()}`,
-      name: uploadFileName,
-      fileType: fileExtension,
-      fileSize: selectedFile.size,
-      fileSizeFormatted: formatFileSize(selectedFile.size),
-      projectId: uploadProject,
-      projectName: selectedProjectObj?.name || 'Unknown Project',
-      uploadedBy: user?.id || '',
-      uploadedAt: new Date(),
-      updatedAt: new Date(),
-      description: uploadDescription || null,
-      tags: uploadTags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag),
-      isArchived: false,
-      storageProvider: 'local',
-      s3BucketName: null,
-      s3ObjectKey: null,
-      s3Region: null,
-      contentType: selectedFile.type,
-      publicUrl: null,
-      accessLevel: 'project',
-      filePath: `/documents/${uploadFileName.toLowerCase().replace(/\s+/g, '-')}`,
-      isStarred: false,
-    }
-
-    setDocuments([newDocument, ...documents])
-
-    // Reset form
-    setUploadFileName('')
-    setUploadDescription('')
-    setUploadProject('')
-    setUploadTags('')
-    setSelectedFile(null)
-    setIsUploadDialogOpen(false)
-
-    toast.success(`Uploaded ${newDocument.name}`)
+    fetch('/api/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: uploadFileName,
+        description: uploadDescription,
+        url: 'https://www.google.com',
+        size: 1024,
+        type: 'pdf',
+        projectId: uploadProject,
+        userId: uploadUser,
+      }),
+    }).then(() => {
+      fetchDocuments()
+      setIsUploadDialogOpen(false)
+    })
+    // if (!selectedFile) {
+    //   toast.error('Please select a file')
+    //   return
+    // }
+    //
+    // if (!uploadFileName.trim()) {
+    //   toast.error('Please enter a file name')
+    //   return
+    // }
+    //
+    // if (!uploadProject) {
+    //   toast.error('Please select a project')
+    //   return
+    // }
+    //
+    // // Create new document
+    // const fileExtension = selectedFile.name.split('.').pop() || ''
+    // const selectedProjectObj = mockProjects.find((p) => p.id === uploadProject)
+    //
+    // const newDocument: Document = {
+    //   id: `doc-${Date.now()}`,
+    //   name: uploadFileName,
+    //   fileType: fileExtension,
+    //   fileSize: selectedFile.size,
+    //   fileSizeFormatted: formatFileSize(selectedFile.size),
+    //   projectId: uploadProject,
+    //   projectName: selectedProjectObj?.name || 'Unknown Project',
+    //   uploadedBy: user?.id || '',
+    //   uploadedAt: new Date(),
+    //   updatedAt: new Date(),
+    //   description: uploadDescription || null,
+    //   tags: uploadTags
+    //     .split(',')
+    //     .map((tag) => tag.trim())
+    //     .filter((tag) => tag),
+    //   isArchived: false,
+    //   storageProvider: 'local',
+    //   s3BucketName: null,
+    //   s3ObjectKey: null,
+    //   s3Region: null,
+    //   contentType: selectedFile.type,
+    //   publicUrl: null,
+    //   accessLevel: 'project',
+    //   filePath: `/documents/${uploadFileName.toLowerCase().replace(/\s+/g, '-')}`,
+    //   isStarred: false,
+    // }
+    //
+    // setDocuments([newDocument, ...documents])
+    //
+    // // Reset form
+    // setUploadFileName('')
+    // setUploadDescription('')
+    // setUploadProject('')
+    // setUploadTags('')
+    // setSelectedFile(null)
+    // setIsUploadDialogOpen(false)
+    //
+    // toast.success(`Uploaded ${newDocument.name}`)
   }
 
   const handleEditDocument = () => {
@@ -428,6 +500,10 @@ export default function DocumentsPage() {
 
     return true
   })
+
+  if (loading) {
+    return 'Loading...'
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -614,9 +690,25 @@ export default function DocumentsPage() {
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockProjects.map((project) => (
+                    {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-project">User</Label>
+                <Select value={uploadUser} onValueChange={setUploadUser}>
+                  <SelectTrigger id="edit-user">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -682,7 +774,7 @@ export default function DocumentsPage() {
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockProjects.map((project) => (
+                    {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
                       </SelectItem>

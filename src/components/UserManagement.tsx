@@ -1,65 +1,62 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { useEffect, useState } from 'react'
+import { Plus, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 
 type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-};
+  id: string
+  name: string
+  email: string
+  role: string
+}
 
 export default function UserManagement() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("EMPLOYEE");
-  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([])
+  const [name, setName] = useState('Test ZHO')
+  const [email, setEmail] = useState('test@gmail.com')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Load users from backend (optional, placeholder here)
-    setUsers([
-      { id: "1", name: "Admin User", email: "admin@example.com", role: "ADMIN" },
-      { id: "2", name: "Jane Smith", email: "jane@example.com", role: "EMPLOYEE" },
-    ]);
-  }, []);
+    fetch('/api/users', { credentials: 'include' }).then((res) => {
+      res.json().then((jsn) => setUsers(jsn))
+    })
+  }, [])
 
   const handleSendInvite = async () => {
-    if (!email) {
-      toast.warning("Veuillez saisir un email.");
-      return;
+    if (!email || !name) {
+      toast.warning('Veuillez saisir un email.')
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
-      const response = await fetch("/api/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/auth/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name,
           email,
-          invitedByAdminId: "ADMIN_ID", // Replace with current admin ID from session/context
-          role,
         }),
-      });
+        credentials: 'include',
+      })
 
       if (!response.ok) {
-        const { error } = await response.json();
-        throw new Error(error || "Erreur lors de l'envoi de l'invitation");
+        const { error } = await response.json()
+        throw new Error(error || "Erreur lors de l'envoi de l'invitation")
       }
 
-      toast.success("Invitation envoyée avec succès !");
-      setEmail("");
-      setRole("EMPLOYEE");
+      toast.success('Invitation envoyée avec succès !')
+      setEmail('')
     } catch (error: any) {
-      toast.error(`Erreur : ${error.message}`);
+      toast.error(`Erreur : ${error.message}`)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="p-4 space-y-6">
@@ -68,22 +65,26 @@ export default function UserManagement() {
       <Card>
         <CardContent className="p-4 grid gap-4 md:grid-cols-4">
           <Input
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
+            defaultValue="EMPLOYEE"
             className="border rounded-md px-3 py-2"
           >
             <option value="EMPLOYEE">Employé</option>
-            <option value="ADMIN">Administrateur</option>
           </select>
           <Button
             onClick={handleSendInvite}
             disabled={loading}
-            className="md:col-span-2"
+            // className="md:col-span-2"
+            style={{ cursor: 'pointer' }}
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -109,5 +110,5 @@ export default function UserManagement() {
         ))}
       </div>
     </div>
-  );
+  )
 }

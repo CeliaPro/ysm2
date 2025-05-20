@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -18,8 +18,49 @@ const Dashboard: React.FC = () => {
   const canManageProjects = isAdmin() || isProjectManager()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [projects, setProjects] = useState<Project[]>(mockProjects)
+  const [projects, setProjects] = useState<Project[]>([])
   const [showArchived, setShowArchived] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const fetchProjects = () => {
+    setLoading(true)
+    fetch('/api/projects')
+      .then((res) => res.json())
+      .then((res: any[]) => {
+        const mappedRes = res.map((prj) => ({
+          id: prj.id,
+          name: prj.name,
+          description: prj.description,
+          documentsCount: 24,
+          membersCount: 8,
+          storageUsed: '120 MB',
+          storageLimit: '1 GB',
+          usagePercentage: 12,
+          createdAt: new Date(2023, 5, 15),
+          lastUpdated: new Date(2023, 11, 15),
+        }))
+        setProjects([...mappedRes, ...mockProjects])
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }
+
+  const onCreateProject = (project: Project) => {
+    fetch('/api/projects', {
+      method: 'post',
+      body: JSON.stringify({
+        name: project.name,
+        description: project.description,
+      }),
+    }).then(() => {
+      fetchProjects()
+    })
+  }
+
+  useEffect(() => {
+    fetchProjects()
+  }, [])
 
   // New project dialog
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
@@ -52,6 +93,10 @@ const Dashboard: React.FC = () => {
   const openEditProjectDialog = (project: Project) => {
     setEditingProject(project)
     setIsEditProjectDialogOpen(true)
+  }
+
+  if (loading) {
+    return <p>Loading...</p>
   }
 
   return (
@@ -115,7 +160,7 @@ const Dashboard: React.FC = () => {
       <NewProjectDialog
         open={isNewProjectDialogOpen}
         onOpenChange={setIsNewProjectDialogOpen}
-        onCreateProject={(newProject) => setProjects([newProject, ...projects])}
+        onCreateProject={onCreateProject}
       />
 
       {/* Edit Project Dialog */}
