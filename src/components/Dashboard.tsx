@@ -9,7 +9,6 @@ import ProjectList from '@/components/dashboard/ProjectList'
 import NewProjectDialog from '@/components/dashboard/NewProjectDialog'
 import EditProjectDialog from '@/components/dashboard/EditProjectDialog'
 import { Project } from '@/types/project'
-
 // Mock data moved to a separate file
 import { mockProjects } from '@/data/mockProjects'
 
@@ -39,7 +38,7 @@ const Dashboard: React.FC = () => {
           createdAt: new Date(2023, 5, 15),
           lastUpdated: new Date(2023, 11, 15),
         }))
-        setProjects([...mappedRes, ...mockProjects])
+         setProjects([...mappedRes, ...mockProjects])
       })
       .finally(() => {
         setLoading(false)
