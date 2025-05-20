@@ -161,8 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isAdmin = () => user?.role === 'ADMIN'
   const isProjectManager = () =>
-    user?.role === 'project_manager' || user?.role === 'admin'
-
+    user?.role === 'MANAGER' || user?.role === 'ADMIN'
   const redeemInviteToken = async (token: string, password: string) => {
     await fetch('/api/auth/invite/redeem', {
       method: 'POST',
