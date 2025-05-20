@@ -1,10 +1,15 @@
 import React from 'react'
-import assets from '../assets/assets'
+import assets from '../components/assets'
 import Image from 'next/image'
 import Markdown from 'react-markdown'
 import toast from 'react-hot-toast'
 
-const Message = ({role, content}) => {
+interface MessageProps {
+    role: string;
+    content: string;
+}
+
+const Message = ({role, content}: MessageProps) => {
 
     const copyMessage = () => {
         navigator.clipboard.writeText(content)
