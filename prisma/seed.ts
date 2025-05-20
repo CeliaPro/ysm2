@@ -78,26 +78,23 @@ async function main() {
   })
 
   // Create documents
-  // const document1 = await prisma.document.upsert({
-  //   where: { id: '1' },
-  //   update: {},
-  //   create: {
-  //     id: '1',
-  //     projectId: project1.id,
-  //     name: 'Website Mockups',
-  //     // description: 'Initial mockups for website redesign',
-  //     filePath: '/storage/documents/mockups.pdf',
-  //     fileSize: 2048576, // 2MB
-  //     fileType: 'pdf',
-  //     uploadedById: adminUser.id,
-  //     storageProvider: 'local',
-  //     contentType: 'application/pdf',
-  //     accessLevel: 'project',
-  //     tags: {
-  //       create: [{ name: 'design' }, { name: 'mockup' }],
-  //     },
-  //   },
-  // })
+  const document1 = await prisma.document.upsert({
+    where: { id: '1' },
+    update: {},
+    create: {
+      url: 'https://www.google.com',
+      id: '1',
+      name: 'Website Mockups',
+      description: 'Initial mockups for website redesign',
+      size: 2048576, // 2MB
+      type: 'pdf',
+      project: { connect: { id: project1.id } },
+      user: { connect: { id: adminUser.id } },
+      tags: {
+        create: [{ name: 'design' }, { name: 'mockup' }],
+      },
+    },
+  })
   //
   //   // Create AI Configurations
   //   const aiConfig = await prisma.AIConfiguration.upsert({
