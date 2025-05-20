@@ -152,7 +152,7 @@ const AuthForm: React.FC = () => {
           </form>
         </TabsContent>
 
-        <TabsContent value="register">
+        {/* <TabsContent value="register">
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nom complet</Label>
@@ -223,7 +223,7 @@ const AuthForm: React.FC = () => {
               {isLoading ? 'Création du compte...' : 'Créer un compte'}
             </Button>
           </form>
-        </TabsContent>
+        </TabsContent> */}
       </Tabs>
     </div>
   )
