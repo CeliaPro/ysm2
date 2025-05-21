@@ -16,7 +16,7 @@ type User = {
 
 export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
-  const [name, setName] = useState('Test ZHO')
+  const [name, setName] = useState('Test')
   const [email, setEmail] = useState('test@gmail.com')
   const [loading, setLoading] = useState(false)
 

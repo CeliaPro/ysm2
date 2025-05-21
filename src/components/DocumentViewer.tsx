@@ -20,7 +20,7 @@ import {
   LockIcon,
   ServerIcon,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/aiUi/badge'
 import { format } from 'date-fns'
 import { Document } from '@/types/project'
 

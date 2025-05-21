@@ -1,64 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
-
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-}
-
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @map("user_role")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  isDeleted Boolean  @default(false)
-
-  // Relations
-  projectMembers ProjectMember[]
-  documents      Document[]
-  chatSessions   ChatSession[]
-  chatMessages   ChatMessage[]
-  Invite         Invite[]
-
-  @@index([email])
-}
-
-model Project {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  archived    Boolean  @default(false)
-
-  // Relations
-  members       ProjectMember[]
-  documents     Document[]
-  storagePolicy StoragePolicy?
-  chatSessions  ChatSession[]
-
-  @@index([name]) // Index on project name for faster search
-}
-
-model ProjectMember {
-  id        String      @id @default(uuid())
-  userId    String
-  projectId String
-  role      ProjectRole
-  createdAt DateTime    @default(now())
-
-  user    User    @relation(fields: [userId], references: [id])
-  project Project @relation(fields: [projectId], references: [id])
-
-  @@unique([userId, projectId])
-  @@index([projectId])
-  @@index([userId])
 }
 
 enum Role {
@@ -69,123 +16,151 @@ enum Role {
 
 enum ProjectRole {
   OWNER
-  MANAGER
   EDITOR
   VIEWER
-}
-
-model Document {
-  id          String   @id @default(uuid())
-  name        String
-  url         String
-  size        Int
-  type        String
-  archived    Boolean
-  favorite    Boolean
-  description String?
-  uploadedAt  DateTime @default(now())
-  projectId   String
-  userId      String
-  storageId   String?
-  isDeleted   Boolean  @default(false)
-
-  // Relations
-  project  Project        @relation(fields: [projectId], references: [id])
-  user     User           @relation(fields: [userId], references: [id])
-  storage  Storage?       @relation(fields: [storageId], references: [id])
-  tags     Tag[]          @relation("DocumentTags")
-  chatDocs ChatDocument[]
-
-  @@index([projectId])
-  @@index([userId])
-}
-
-model Tag {
-  id        String     @id @default(uuid())
-  name      String     @unique
-  documents Document[] @relation("DocumentTags")
-}
-
-model Storage {
-  id        String   @id @default(uuid())
-  s3Bucket  String
-  region    String
-  accessKey String
-  secretKey String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  documents Document[]
-
-  @@index([s3Bucket]) // Index for bucket-based searches
-}
-
-model StoragePolicy {
-  id           String   @id @default(uuid())
-  projectId    String   @unique
-  maxSizeMb    Int
-  allowedTypes String[]
-
-  project Project @relation(fields: [projectId], references: [id])
-}
-
-//
-// 🔹 AI Chatbot-Specific Models
-//
-
-model ChatSession {
-  id        String   @id @default(uuid())
-  title     String?
-  userId    String
-  projectId String
-  createdAt DateTime @default(now())
-
-  user     User          @relation(fields: [userId], references: [id])
-  project  Project       @relation(fields: [projectId], references: [id])
-  messages ChatMessage[]
-
-  @@index([userId])
-  @@index([projectId])
-}
-
-model ChatMessage {
-  id        String   @id @default(uuid())
-  content   String
-  role      ChatRole
-  sessionId String
-  userId    String?
-  createdAt DateTime @default(now())
-
-  session    ChatSession    @relation(fields: [sessionId], references: [id])
-  user       User?          @relation(fields: [userId], references: [id])
-  references ChatDocument[]
-
-  @@index([sessionId])
-}
-
-model ChatDocument {
-  id         String @id @default(uuid())
-  messageId  String
-  documentId String
-
-  message  ChatMessage @relation(fields: [messageId], references: [id])
-  document Document    @relation(fields: [documentId], references: [id])
-
-  @@unique([messageId, documentId])
-}
-
-model Invite {
-  id               String   @id @default(uuid())
-  email            String
-  token            String   @unique
-  invitedByAdmin   User     @relation(fields: [invitedByAdminId], references: [id])
-  invitedByAdminId String
-  createdAt        DateTime @default(now())
-  expiresAt        DateTime
-  used             Boolean  @default(false)
+  MANAGER // ✅ Restored if used in the DB
 }
 
 enum ChatRole {
   USER
   ASSISTANT
+  SYSTEM
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  // ✅ Preserved legacy fields
+  isDeleted Boolean?
+  user_role String?
+
+  // Relations
+  projects      ProjectMember[]
+  documents     Document[]
+  invites       Invite[]        @relation("Inviter")
+  conversations Conversation[]
+  messages      Message[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // ✅ Preserved if still used
+  archived Boolean @default(false)
+
+  members       ProjectMember[]
+  documents     Document[]
+  storagePolicy StoragePolicy?
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  userId    String
+  projectId String
+  role      ProjectRole
+
+  // ✅ Preserved if used
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+}
+
+model Document {
+  id          String   @id
+  name        String
+  description String?
+  url         String
+  type        String
+  size        Int
+  archived    Boolean  @default(false)
+  favorite    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId    String
+  projectId String
+  storageId String?
+
+  user    User     @relation(fields: [userId], references: [id])
+  project Project  @relation(fields: [projectId], references: [id])
+  storage Storage? @relation(fields: [storageId], references: [id])
+  tags    Tag[]    @relation("DocumentTags")
+}
+
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique(map: "Tag_name_unique") // ✅ Fix duplicate constraint name
+  documents Document[] @relation("DocumentTags")
+}
+
+model Storage {
+  id        String     @id @default(cuid())
+  s3Bucket  String
+  documents Document[]
+
+  @@index([s3Bucket])
+}
+
+model StoragePolicy {
+  id            String  @id @default(cuid())
+  projectId     String  @unique
+  maxSizeMb     Int
+  allowedTypes  String? // comma-separated
+  retentionDays Int?
+
+  project Project @relation(fields: [projectId], references: [id])
+}
+
+model Invite {
+  id               String   @id @default(cuid())
+  email            String
+  token            String   @unique
+  role             Role
+  invitedByAdminId String
+  createdAt        DateTime @default(now())
+
+  invitedBy User @relation("Inviter", fields: [invitedByAdminId], references: [id])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  summary   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  role        ChatRole
+  content     String
+  metadata    Json?
+  liked       Boolean? @default(false)
+  disliked    Boolean? @default(false)
+  embeddingId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId         String?
+  conversationId String
+
+  user         User?        @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 }

@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/aiUi/badge'
 import {
   Select,
   SelectContent,
@@ -191,7 +191,7 @@ const mockProjects = [
   { id: '1', name: 'Finance Portal' },
   { id: '2', name: 'Product Development' },
   { id: '3', name: 'Marketing' },
-  { id: '4', name: 'HR Policies' },
+  // { id: '4', name: 'HR Policies' },
 ]
 
 export default function DocumentsPage() {
@@ -355,64 +355,7 @@ export default function DocumentsPage() {
       fetchDocuments()
       setIsUploadDialogOpen(false)
     })
-    // if (!selectedFile) {
-    //   toast.error('Please select a file')
-    //   return
-    // }
-    //
-    // if (!uploadFileName.trim()) {
-    //   toast.error('Please enter a file name')
-    //   return
-    // }
-    //
-    // if (!uploadProject) {
-    //   toast.error('Please select a project')
-    //   return
-    // }
-    //
-    // // Create new document
-    // const fileExtension = selectedFile.name.split('.').pop() || ''
-    // const selectedProjectObj = mockProjects.find((p) => p.id === uploadProject)
-    //
-    // const newDocument: Document = {
-    //   id: `doc-${Date.now()}`,
-    //   name: uploadFileName,
-    //   fileType: fileExtension,
-    //   fileSize: selectedFile.size,
-    //   fileSizeFormatted: formatFileSize(selectedFile.size),
-    //   projectId: uploadProject,
-    //   projectName: selectedProjectObj?.name || 'Unknown Project',
-    //   uploadedBy: user?.id || '',
-    //   uploadedAt: new Date(),
-    //   updatedAt: new Date(),
-    //   description: uploadDescription || null,
-    //   tags: uploadTags
-    //     .split(',')
-    //     .map((tag) => tag.trim())
-    //     .filter((tag) => tag),
-    //   isArchived: false,
-    //   storageProvider: 'local',
-    //   s3BucketName: null,
-    //   s3ObjectKey: null,
-    //   s3Region: null,
-    //   contentType: selectedFile.type,
-    //   publicUrl: null,
-    //   accessLevel: 'project',
-    //   filePath: `/documents/${uploadFileName.toLowerCase().replace(/\s+/g, '-')}`,
-    //   isStarred: false,
-    // }
-    //
-    // setDocuments([newDocument, ...documents])
-    //
-    // // Reset form
-    // setUploadFileName('')
-    // setUploadDescription('')
-    // setUploadProject('')
-    // setUploadTags('')
-    // setSelectedFile(null)
-    // setIsUploadDialogOpen(false)
-    //
-    // toast.success(`Uploaded ${newDocument.name}`)
+  
   }
 
   const handleEditDocument = () => {

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/aiUi/badge'
 import { SearchIcon, PlusIcon } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import ProjectList from '@/components/dashboard/ProjectList'

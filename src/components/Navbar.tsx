@@ -45,6 +45,12 @@ const Navbar: React.FC = () => {
       showAlways: true,
     },
     {
+      name: 'AI Assistant',
+      path: '/ai',
+      icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
       name: 'Settings',
       path: '/users',
       icon: <FolderClosed className="h-4 w-4 mr-2" />,

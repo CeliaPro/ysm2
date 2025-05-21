@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { Document } from '@/types/project'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/aiUi/badge'
 
 interface DocumentCardProps {
   document: Document

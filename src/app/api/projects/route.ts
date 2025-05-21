@@ -27,3 +27,21 @@ export const POST = withAuthentication(async (req) => {
     success: true,
   }
 })
+
+
+//le moi
+export const DELETE = withAuthentication(async (req) => {
+  const projectId = req.nextUrl.searchParams.get('id')
+
+  if (!projectId) {
+    return new Response(JSON.stringify({ error: 'Project ID is required' }), { status: 400 })
+  }
+
+  await prisma.project.delete({
+    where: { id: projectId },
+  })
+
+  return new Response(JSON.stringify({ success: true }))
+},'MANAGER')
+
+

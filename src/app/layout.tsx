@@ -1,6 +1,8 @@
+// app/layout.tsx
 import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { AppProvider } from '@/contexts/AppContext'  // ⬅️ import it
 
 export const metadata: Metadata = {
   title: 'Create Next App',
@@ -9,13 +11,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
     <html lang="en" className="dark">
       <body>
-        <AuthProvider children={children} />
+        <AuthProvider>
+          <AppProvider>
+            {children}
+          </AppProvider>
+        </AuthProvider>
       </body>
     </html>
   )
