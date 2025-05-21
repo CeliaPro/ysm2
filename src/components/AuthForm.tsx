@@ -101,9 +101,9 @@ const AuthForm: React.FC = () => {
       <h2 className="text-2xl font-bold text-center mb-6">DocuMind</h2>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="login">Connexion</TabsTrigger>
-          <TabsTrigger value="register">Inscription</TabsTrigger>
+        <TabsList className="flex justify-center mb-6">
+          <TabsTrigger value="login" className="w-full justify-center">Connexion utilisateur</TabsTrigger>
+          {/* <TabsTrigger value="register">Inscription</TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="login">
@@ -152,7 +152,7 @@ const AuthForm: React.FC = () => {
           </form>
         </TabsContent>
 
-        <TabsContent value="register">
+        {/* <TabsContent value="register">
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nom complet</Label>
@@ -223,7 +223,7 @@ const AuthForm: React.FC = () => {
               {isLoading ? 'Création du compte...' : 'Créer un compte'}
             </Button>
           </form>
-        </TabsContent>
+        </TabsContent> */}
       </Tabs>
     </div>
   )

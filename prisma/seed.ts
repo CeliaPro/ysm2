@@ -88,6 +88,8 @@ async function main() {
       description: 'Initial mockups for website redesign',
       size: 2048576, // 2MB
       type: 'pdf',
+      archived: false,
+     favorite: false,
       project: { connect: { id: project1.id } },
       user: { connect: { id: adminUser.id } },
       tags: {

@@ -29,7 +29,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  register: (email: string, password: string, name: string) => Promise<void>
+  // register: (email: string, password: string, name: string) => Promise<void>
   isAdmin: () => boolean
   isProjectManager: () => boolean
   redeemInviteToken: (token: string, password: string) => Promise<void>
@@ -141,23 +141,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error('Logout failed')
     }
   }
-  const register = async (email: string, password: string, name: string) => {
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800))
+  // const register = async (email: string, password: string, name: string) => {
+  //   try {
+  //     await new Promise((resolve) => setTimeout(resolve, 800))
 
-      if (MOCK_USERS.some((u) => u.email === email)) {
-        throw new Error('User already exists')
-      }
+  //     if (MOCK_USERS.some((u) => u.email === email)) {
+  //       throw new Error('User already exists')
+  //     }
 
-      toast.success('Registration successful! Please log in.')
-    } catch (error) {
-      toast.error(
-        'Registration failed: ' +
-          (error instanceof Error ? error.message : 'Unknown error')
-      )
-      throw error
-    }
-  }
+  //     toast.success('Registration successful! Please log in.')
+  //   } catch (error) {
+  //     toast.error(
+  //       'Registration failed: ' +
+  //         (error instanceof Error ? error.message : 'Unknown error')
+  //     )
+  //     throw error
+  //   }
+  // }
 
   const isAdmin = () => user?.role === 'ADMIN'
   const isProjectManager = () =>
@@ -182,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticated: !!user,
         login,
         logout,
-        register,
+        // register,
         isAdmin,
         isProjectManager,
         redeemInviteToken,

@@ -80,6 +80,8 @@ model Document {
   url         String
   size        Int
   type        String
+  archived    Boolean
+  favorite    Boolean
   description String?
   uploadedAt  DateTime @default(now())
   projectId   String
