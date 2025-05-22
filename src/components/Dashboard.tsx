@@ -9,8 +9,8 @@ import ProjectList from '@/components/dashboard/ProjectList'
 import NewProjectDialog from '@/components/dashboard/NewProjectDialog'
 import EditProjectDialog from '@/components/dashboard/EditProjectDialog'
 import { Project } from '@/types/project'
-// Mock data moved to a separate file
 import { mockProjects } from '@/data/mockProjects'
+import { toast } from 'sonner'
 
 const Dashboard: React.FC = () => {
   const { isAdmin, isProjectManager } = useAuth()
@@ -21,72 +21,112 @@ const Dashboard: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const fetchProjects = () => {
-    setLoading(true)
-    fetch('/api/projects')
-      .then((res) => res.json())
-      .then((res: any[]) => {
-        const mappedRes = res.map((prj) => ({
-          id: prj.id,
-          name: prj.name,
-          description: prj.description,
-          documentsCount: 24,
-          membersCount: 8,
-          storageUsed: '120 MB',
-          storageLimit: '1 GB',
-          usagePercentage: 12,
-          createdAt: new Date(2023, 5, 15),
-          lastUpdated: new Date(2023, 11, 15),
-        }))
-         setProjects([...mappedRes, ...mockProjects])
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }
+  const fetchProjects = async () => {
+  setLoading(true)
+  try {
+    const res = await fetch('/api/projects', { credentials: 'include' })
+    const json = await res.json()
 
-  const onCreateProject = (project: Project) => {
-    fetch('/api/projects', {
-      method: 'post',
-      body: JSON.stringify({
-        name: project.name,
-        description: project.description,
-      }),
-    }).then(() => {
-      fetchProjects()
-    })
+    const apiProjects: Project[] = json.map((prj: any) => ({
+      id: prj.id,
+      name: prj.name,
+      description: prj.description,
+      documentsCount: prj.documentsCount ?? 0,
+      membersCount: prj.membersCount ?? 0,
+      storageUsed: prj.storageUsed ?? '',
+      storageLimit: prj.storageLimit ?? '',
+      usagePercentage: prj.usagePercentage ?? 0,
+      isArchived: prj.isArchived ?? false,
+
+      // ✏️ Use prj.createdAt and prj.updatedAt here:
+      createdAt: new Date(prj.createdAt),
+      lastUpdated: new Date(prj.updatedAt),
+    }))
+
+    setProjects(apiProjects)
+  } catch (err) {
+    console.error(err)
+    toast.error('Échec du chargement des projets')
+  } finally {
+    setLoading(false)
   }
+}
 
   useEffect(() => {
     fetchProjects()
   }, [])
 
-  // New project dialog
-  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
+  const onCreateProject = (project: Project) => {
+    fetch('/api/projects', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: project.name,
+        description: project.description,
+      }),
+    }).then(() => fetchProjects())
+  }
 
-  // Edit project dialog
+  // NEW / EDIT dialog state (unchanged)
+  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
   const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
 
   const filteredProjects = projects
-    .filter((project) => showArchived || !project.isArchived)
+    .filter((p) => showArchived || !p.isArchived)
     .filter(
-      (project) =>
-        project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      (p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-  const handleArchiveProject = (project: Project) => {
-    const updatedProjects = projects.map((p) =>
-      p.id === project.id ? { ...p, isArchived: !p.isArchived } : p
-    )
-
-    setProjects(updatedProjects)
+  // ARCHIVE / UNARCHIVE via API
+  const handleArchiveProject = async (project: Project) => {
+    try {
+      const res = await fetch(`/api/projects?id=${project.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: !project.isArchived }),
+      })
+      const body = await res.json()
+      if (!res.ok || !body.success) {
+        throw new Error(body.message || 'Échec de l’archivage')
+      }
+      // merge updated project back into state
+      setProjects((prev) =>
+        prev.map((p) => (p.id === project.id ? body.data : p))
+      )
+      toast.success(
+        `Projet "${project.name}" ${
+          project.isArchived ? 'désarchivé' : 'archivé'
+        } avec succès`
+      )
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Erreur lors de l’archivage')
+    }
   }
 
-  const handleDeleteProject = (project: Project) => {
-    const updatedProjects = projects.filter((p) => p.id !== project.id)
-    setProjects(updatedProjects)
+  // DELETE via API
+  const handleDeleteProject = async (project: Project) => {
+    if (!confirm(`Supprimer "${project.name}" ?`)) return
+    try {
+      const res = await fetch(`/api/projects?id=${project.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const body = await res.json()
+      if (!res.ok || !body.success) {
+        throw new Error(body.message || 'Échec de la suppression')
+      }
+      setProjects((prev) => prev.filter((p) => p.id !== project.id))
+      toast.success(`Projet "${project.name}" supprimé avec succès`)
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Erreur lors de la suppression')
+    }
   }
 
   const openEditProjectDialog = (project: Project) => {
@@ -94,12 +134,11 @@ const Dashboard: React.FC = () => {
     setIsEditProjectDialogOpen(true)
   }
 
-  if (loading) {
-    return <p>Loading...</p>
-  }
+  if (loading) return <p>Loading...</p>
 
   return (
     <div className="animate-fade-in">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="font-bold">Projets</h1>
@@ -107,7 +146,6 @@ const Dashboard: React.FC = () => {
             Gérez vos projets de documents
           </p>
         </div>
-
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -118,7 +156,6 @@ const Dashboard: React.FC = () => {
               className="pl-9 w-full sm:w-64"
             />
           </div>
-
           {canManageProjects && (
             <Button onClick={() => setIsNewProjectDialogOpen(true)}>
               <PlusIcon className="h-4 w-4 mr-2" />
@@ -128,13 +165,12 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Badge & toggle */}
       <div className="flex justify-between items-center mb-4">
-        <div>
-          <Badge variant="outline">
-            {filteredProjects.length}{' '}
-            {filteredProjects.length === 1 ? 'projet' : 'projets'}
-          </Badge>
-        </div>
+        <Badge variant="outline">
+          {filteredProjects.length}{' '}
+          {filteredProjects.length === 1 ? 'projet' : 'projets'}
+        </Badge>
         <Button
           variant="ghost"
           size="sm"
@@ -144,6 +180,7 @@ const Dashboard: React.FC = () => {
         </Button>
       </div>
 
+      {/* Project list */}
       <ProjectList
         projects={filteredProjects}
         searchQuery={searchQuery}
@@ -155,23 +192,25 @@ const Dashboard: React.FC = () => {
         onDeleteProject={handleDeleteProject}
       />
 
-      {/* New Project Dialog */}
+      {/* New / Edit Dialogs */}
       <NewProjectDialog
         open={isNewProjectDialogOpen}
         onOpenChange={setIsNewProjectDialogOpen}
         onCreateProject={onCreateProject}
       />
-
-      {/* Edit Project Dialog */}
       <EditProjectDialog
         open={isEditProjectDialogOpen}
         onOpenChange={setIsEditProjectDialogOpen}
         project={editingProject}
-        onSaveChanges={(updatedProject) => {
-          const updatedProjects = projects.map((project) =>
-            project.id === updatedProject.id ? updatedProject : project
+        onSaveChanges={(updated) => {
+          setProjects((prev) =>
+            prev.map((p) => (p.id === updated.id ? updated : p))
           )
-          setProjects(updatedProjects)
+          setIsEditProjectDialogOpen(false)
+        }}
+        onDelete={(id) => {
+          setProjects((prev) => prev.filter((p) => p.id !== id))
+          setIsEditProjectDialogOpen(false)
         }}
       />
     </div>

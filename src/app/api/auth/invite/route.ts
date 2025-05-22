@@ -5,7 +5,10 @@ import {
 import { withAuthentication } from '@/app/utils/auth.utils'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 
-const client = new SESClient({ region: 'eu-central-1' })
+const client = new SESClient({ region: 'eu-central-1', credentials: {
+  accessKeyId: process.env.AWS_ACCESS_SES_KEY_ID!!,
+  secretAccessKey: process.env.AWS_SECRET_SES_ACCESS_KEY!!,
+} })
 
 export const POST = withAuthentication(async (req) => {
   const { email, name } = await req.json()

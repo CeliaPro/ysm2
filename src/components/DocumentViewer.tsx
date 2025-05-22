@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onArchive,
   onDelete,
 }) => {
+  const [s3Link, setS3Link] = React.useState<string>('#')
+  const ref = useRef<HTMLAnchorElement>(null)
+
   if (!document) {
     return null
   }
@@ -73,6 +76,22 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   }
 
+  const handleDocumentDownload = () => {
+    console.log('Downloading document:', document)
+    fetch('/api/files/download', {
+      method: 'POST',
+      credentials: 'include',
+      body: JSON.stringify({key: document.publicUrl})
+    }
+
+    ).then((res)=> res.json()).then((data) => {
+      if(data.success){
+        ref.current?.setAttribute('href', data.presignedUrl)
+        ref.current?.click()
+      }
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
@@ -83,6 +102,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             {document.projectName}
           </DialogDescription>
         </DialogHeader>
+        // href with ref to open the file in a new tab in one line
+        <a
+        ref={ref}
+          href={s3Link}
+          target="_blank"
+          rel="noopener noreferrer"
+        />
+        
 
         <div className="flex flex-col gap-4 py-4">
           <div className="flex items-center gap-2">
@@ -182,10 +209,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <IconButton
-              onClick={() => {
-                // Implement download functionality here
-                console.log('Télécharger le document', document.name)
-              }}
+              onClick={handleDocumentDownload}
             >
               <DownloadIcon className="h-4 w-4" />
             </IconButton>

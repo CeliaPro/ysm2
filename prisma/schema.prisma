@@ -79,7 +79,7 @@ model ProjectMember {
 }
 
 model Document {
-  id          String   @id
+  id          String   @id @default(cuid())
   name        String
   description String?
   url         String

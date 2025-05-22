@@ -222,6 +222,8 @@ export default function DocumentsPage() {
   const [editProject, setEditProject] = useState<string>('')
   const [editTags, setEditTags] = useState('')
   const [loading, setLoading] = useState(true)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [fileKey, setFileKey] = useState('key')
 
   //Users and Projects data
   const [users, setUsers] = useState<{ id: string; name: string }[]>([])
@@ -250,12 +252,12 @@ export default function DocumentsPage() {
           name: dc.name,
           fileType: dc.type,
           fileSize: dc.size,
-          fileSizeFormatted: '12.8 MB',
+          fileSizeFormatted: formatFileSize(dc.size),
           projectId: '3',
           projectName: 'Marketing',
           uploadedBy: '3',
-          uploadedAt: dc.uploadedAt,
-          updatedAt: new Date(2023, 11, 2),
+          uploadedAt: new Date(dc.createdAt),
+          updatedAt:  new Date(dc.updatedAt),
           tags: ['design', 'branding'],
           isStarred: true,
           description: dc.description,
@@ -269,7 +271,7 @@ export default function DocumentsPage() {
           accessLevel: 'public',
           filePath: '/documents/logo-finals.png',
         }))
-        setDocuments([...mapRes, ...mockDocuments])
+        setDocuments(mapRes)
       })
   }
 
@@ -331,23 +333,47 @@ export default function DocumentsPage() {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0]
       setSelectedFile(file)
-
-      // Auto-fill filename from the selected file
-      if (!uploadFileName) {
-        setUploadFileName(file.name)
+      setUploadingFile(true)
+      fetch('/api/files/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          contentType: file.type,
+        }),
       }
+      ).then((res) => res.json()).then((res) => {
+        if (res.success) {
+          const { presignedUrl, key } = res
+          setFileKey(key)
+          fetch(presignedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type,
+            },
+            body: file,
+          }).then(() => {
+            setUploadingFile(false)
+            toast.success('File uploaded successfully')
+          })
+        } else {
+          toast.error('Failed to upload file')
+        }
+      })
     }
   }
 
   const handleUploadDocument = () => {
+    if(!selectedFile){
+      return
+    }
     fetch('/api/documents', {
       method: 'POST',
       body: JSON.stringify({
         name: uploadFileName,
         description: uploadDescription,
-        url: 'https://www.google.com',
-        size: 1024,
-        type: 'pdf',
+        url: fileKey,
+        size: selectedFile.size,
+        type: selectedFile.type,
         projectId: uploadProject,
         userId: uploadUser,
       }),
@@ -676,7 +702,7 @@ export default function DocumentsPage() {
               >
                 Cancel
               </Button>
-              <Button onClick={handleUploadDocument}>Upload</Button>
+              <Button onClick={handleUploadDocument} disabled={!selectedFile || uploadingFile}>Upload</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

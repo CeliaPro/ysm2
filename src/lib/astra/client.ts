@@ -14,7 +14,7 @@ envVars.forEach(varName => {
 
 export const astraClient = new DataAPIClient(process.env.ASTRA_DB_APPLICATION_TOKEN!);
 export const db = astraClient.db(process.env.ASTRA_DB_API_ENDPOINT!, {
-  namespace: process.env.ASTRA_DB_NAMESPACE!
+  keyspace: process.env.ASTRA_DB_NAMESPACE!
 });
 
 export type AstraDoc = {

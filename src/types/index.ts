@@ -12,7 +12,12 @@ export interface MessageMetadata {
   processingId?: string
   [key: string]: unknown
 }
-export type SafeMetadata = Prisma.JsonValue
+
+/**
+ * For writes (create / update) Prisma expects `InputJsonValue`.
+ * Using that type removes the “not assignable” error.
+ */
+export type SafeMetadata = Prisma.InputJsonValue    // ← fixed
 
 // ---------- Message ----------
 export interface Message {
@@ -44,6 +49,6 @@ export interface MessageCreate {
   role: ChatRole
   content: string
   conversationId: string
-  userId?: string             // ✅ optional (null allowed)
-  metadata?: SafeMetadata     // ✅ consistent
+  userId?: string              // optional (assistant messages have null)
+  metadata?: SafeMetadata
 }

@@ -1,4 +1,5 @@
-import React from 'react'
+'use client'
+import React, { useState } from 'react'
 import {
   Card,
   CardHeader,
@@ -17,17 +18,16 @@ import {
   UsersIcon,
   MoreHorizontalIcon,
   EditIcon,
-  TrashIcon,
   ArchiveIcon,
+  TrashIcon,
 } from 'lucide-react'
 import {
   DropdownMenu,
+  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { toast } from 'sonner'
 
 interface ProjectCardProps {
   project: Project
@@ -44,106 +44,114 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onArchiveProject,
   onDeleteProject,
 }) => {
+  // control Radix menu open/closed
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const createdText = `Créé ${formatDistanceToNow(project.createdAt, {
+    addSuffix: true,
+  })}`
+  const updatedText = `Mis à jour ${formatDistanceToNow(project.lastUpdated, {
+    addSuffix: true,
+  })}`
+
+  // each handler closes menu then invokes parent callback
+  const handleEdit = () => {
+    setMenuOpen(false)
+    onEditProject(project)
+  }
   const handleArchive = () => {
+    setMenuOpen(false)
     onArchiveProject(project)
-    toast.success(
-      `Projet "${project.name}" ${project.isArchived ? 'désarchivé' : 'archivé'} avec succès`
-    )
   }
-
   const handleDelete = () => {
+    setMenuOpen(false)
     onDeleteProject(project)
-    toast.success(`Projet "${project.name}" supprimé avec succès`)
-  }
-
-  // French-localized date formatting for display
-  const formatCreatedDate = () => {
-    return `Créé ${formatDistanceToNow(project.createdAt, { addSuffix: true })}`
-  }
-
-  const formatUpdatedDate = () => {
-    return `Mis à jour ${formatDistanceToNow(project.lastUpdated, { addSuffix: true })}`
   }
 
   return (
-    <Card
-      className={`transition-all duration-300 hover:shadow-md ${project.isArchived ? 'opacity-70' : 'opacity-100'}`}
-    >
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center">
-              {project.name}
-              {project.isArchived && (
-                <Badge
-                  variant="outline"
-                  className="ml-2 bg-yellow-100 text-yellow-800 border-yellow-200"
-                >
-                  Archivé
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="max-w-[280px]">
-              {project.description}
-            </CardDescription>
-          </div>
-
-          {canManageProjects && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontalIcon className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEditProject(project)}>
-                  <EditIcon className="h-4 w-4 mr-2" />
-                  Modifier
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleArchive}>
-                  <ArchiveIcon className="h-4 w-4 mr-2" />
-                  {project.isArchived ? 'Désarchiver' : 'Archiver'}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleDelete}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <TrashIcon className="h-4 w-4 mr-2" />
-                  Supprimer
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+    <Card className={`relative transition-shadow hover:shadow-md ${project.isArchived ? 'opacity-70' : ''}`}>
+      <CardHeader className="pb-2">
+        <div>
+          <CardTitle className="flex items-center">
+            {project.name}
+            {project.isArchived && (
+              <Badge variant="outline" className="ml-2">
+                Archivé
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>{project.description}</CardDescription>
         </div>
+
+        {canManageProjects && (
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            {/* three-dots trigger, positioned top-right */}
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="absolute top-2 right-2">
+                <MoreHorizontalIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end">
+              {/* Edit */}
+              <DropdownMenuItem asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center px-2 py-1"
+                  onClick={handleEdit}
+                >
+                  <EditIcon className="mr-2 h-4 w-4" />
+                  Modifier
+                </button>
+              </DropdownMenuItem>
+
+              {/* Archive / Unarchive */}
+              <DropdownMenuItem asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center px-2 py-1"
+                  onClick={handleArchive}
+                >
+                  <ArchiveIcon className="mr-2 h-4 w-4" />
+                  {project.isArchived ? 'Désarchiver' : 'Archiver'}
+                </button>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Delete */}
+              <DropdownMenuItem asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center px-2 py-1 text-destructive"
+                  onClick={handleDelete}
+                >
+                  <TrashIcon className="mr-2 h-4 w-4" />
+                  Supprimer
+                </button>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </CardHeader>
 
       <CardContent className="pb-3">
         <div className="flex justify-between items-center mb-2 text-sm">
           <div className="flex items-center">
-            <FileIcon className="h-4 w-4 mr-1 text-muted-foreground" />
-            <span>{project.documentsCount} documents</span>
+            <FileIcon className="mr-1 h-4 w-4 text-muted-foreground" />
+            {project.documentsCount} documents
           </div>
           <div className="flex items-center">
-            <UsersIcon className="h-4 w-4 mr-1 text-muted-foreground" />
-            <span>{project.membersCount} membres</span>
+            <UsersIcon className="mr-1 h-4 w-4 text-muted-foreground" />
+            {project.membersCount} membres
           </div>
         </div>
-
-        <div className="space-y-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Stockage</span>
-            <span>
-              {project.storageUsed} / {project.storageLimit}
-            </span>
-          </div>
-          <Progress value={project.usagePercentage} />
-        </div>
+        <Progress value={project.usagePercentage} />
       </CardContent>
 
-      <CardFooter className="pt-3 flex justify-between text-xs text-muted-foreground">
-        <span>{formatCreatedDate()}</span>
-        <span>{formatUpdatedDate()}</span>
+      <CardFooter className="flex justify-between text-xs text-muted-foreground pt-3">
+        <span>{createdText}</span>
+        <span>{updatedText}</span>
       </CardFooter>
     </Card>
   )

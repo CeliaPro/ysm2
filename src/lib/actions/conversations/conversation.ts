@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
  import { ChatRole, Prisma } from '@prisma/client';
- import { MessageMetadata, SafeMetadata } from '@/types';
+ import { MessageMetadata, SafeMetadata } from '@/types/index';
   import { withPrisma } from '@/lib/utils/withPrisma';
 
 

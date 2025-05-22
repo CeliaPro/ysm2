@@ -1,7 +1,8 @@
 import { withAuthentication } from '@/app/utils/auth.utils'
 import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
 
-export const GET = withAuthentication(async (req) => {
+export const GET = withAuthentication(async (req, user) => {
   const minimalFetch = req.nextUrl.searchParams.get('minimal') === 'true'
   if (minimalFetch) {
     return prisma.user.findMany({
@@ -11,6 +12,9 @@ export const GET = withAuthentication(async (req) => {
       },
     })
   } else {
+    if(user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return prisma.user.findMany({
       select: {
         id: true,
@@ -22,4 +26,4 @@ export const GET = withAuthentication(async (req) => {
       },
     })
   }
-}, 'ADMIN')
+}, 'EMPLOYEE')

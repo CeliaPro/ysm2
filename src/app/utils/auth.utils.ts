@@ -1,15 +1,13 @@
+// app/utils/auth.utils.ts
 import jwt from 'jsonwebtoken'
 import { NextRequest, NextResponse } from 'next/server'
 
 const JWT_SECRET = process.env.JWT_SECRET as string
 
 type Role = 'ADMIN' | 'EMPLOYEE' | 'MANAGER'
+interface User { id: string; email: string; role: Role }
 
-interface User {
-  id: string
-  email: string
-  role: Role
-}
+
 
 export function storeJwtInCookie(user: User) {
   const token = jwt.sign(
@@ -34,38 +32,45 @@ export function storeJwtInCookie(user: User) {
   return response
 }
 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Handler = (req: NextRequest, user: User) => Promise<Record<any, any>>
+type Handler = (req: NextRequest, user: User) => Promise<any>
 
 export function withAuthentication(
   handler: Handler,
   minimumRole: Role = 'EMPLOYEE'
 ) {
   return async (request: NextRequest): Promise<NextResponse> => {
-    try {
-      const jwtCookie = request.cookies.get('jwt')?.value || ''
-      const user = jwt.verify(jwtCookie, JWT_SECRET) as User
-      switch (minimumRole) {
-        case 'ADMIN': {
-          if (user.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-          }
-          break
-        }
-        case 'MANAGER': {
-          if (user.role !== 'ADMIN' && user.role !== 'MANAGER') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-          }
-          break
-        }
-        case 'EMPLOYEE': {
-          break
-        }
-      }
-      return NextResponse.json(await handler(request, user))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unused-vars
-    } catch (e: any) {
+    // 1) verify token
+    const token = request.cookies.get('jwt')?.value
+    if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    let user: User
+    try {
+      user = jwt.verify(token, JWT_SECRET) as User
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 2) check roles
+    if (
+      (minimumRole === 'MANAGER' && !['ADMIN', 'MANAGER'].includes(user.role)) ||
+      (minimumRole === 'ADMIN' && user.role !== 'ADMIN')
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // 3) call handler
+    const result = await handler(request, user)
+
+    // 4) if handler already gave us a NextResponse, use it
+    if (result instanceof NextResponse) {
+      return result
+    }
+
+    // 5) otherwise JSON-serialize the plain object
+    return NextResponse.json(result)
   }
 }
