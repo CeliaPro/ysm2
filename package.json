@@ -23,6 +23,8 @@
     "@datastax/astra-db-ts": "^2.0.1",
     "@headlessui/react": "^2.2.4",
     "@hookform/resolvers": "^5.0.1",
+    "@langchain/community": "^0.3.44",
+    "@langchain/core": "^0.3.57",
     "@prisma/client": "^6.8.2",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -61,6 +63,7 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.2",
+    "langchain": "^0.3.27",
     "lucide-react": "^0.462.0",
     "mailersend": "^2.5.0",
     "next": "15.3.1",
@@ -79,7 +82,8 @@
     "tailwind-merge": "^3.2.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -91,6 +95,7 @@
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/xlsx": "^0.0.35",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
     "prettier": "3.5.3",

@@ -39,7 +39,8 @@ export async function getContextFromQuery(query: string, conversationId: string)
       return results
         .map((doc) => {
           const metadata = doc.metadata as { source?: string; chunkIndex?: number };
-          return `From ${metadata.source} (Part ${metadata.chunkIndex + 1}):\n${doc.text}`;
+          const chunkIndex = metadata.chunkIndex !== undefined ? metadata.chunkIndex + 1 : "N/A";
+          return `From ${metadata.source} (Part ${chunkIndex}):\n${doc.text}`;
         })
         .join("\n\n---\n\n");
 

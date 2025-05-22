@@ -190,10 +190,10 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
           $vector: vectors[newChunkIndex],
           text: doc.pageContent,
           metadata: {
-            id:fileName+conversationId,
+            id: fileName + conversationId,
             source: fileName,
             chunkIndex: idx,
-            userId: userId || null,
+            userId: userId || undefined,
             conversationId,
             createdAt: new Date().toISOString(),
             chunkHash: hash,

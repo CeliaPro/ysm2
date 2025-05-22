@@ -21,10 +21,10 @@ export type SafeMetadata = Prisma.InputJsonValue    // ← fixed
 
 // ---------- Message ----------
 export interface Message {
-  role: ChatRole
-  content: string
-  timestamp: number
-  metadata?: SafeMetadata
+  role: ChatRole;
+  content: string;
+  timestamp: number;
+  metadata?: Record<string, unknown>;
 }
 
 // ---------- Conversation ----------
@@ -46,9 +46,9 @@ export interface ApiResponse<T> {
 
 // ---------- Payload for createMessage ----------
 export interface MessageCreate {
-  role: ChatRole
-  content: string
-  conversationId: string
-  userId?: string              // optional (assistant messages have null)
-  metadata?: SafeMetadata
+  role: ChatRole;
+  content: string;
+  conversationId: string;
+  userId: string;
+  metadata?: MessageMetadata;
 }
