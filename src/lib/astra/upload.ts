@@ -142,8 +142,8 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
     // Set des clés composites existantes
     const existingKeys = new Set(
       existingDocs.map(d => createKey(
-        d.metadata.conversationId,
-        d.metadata.chunkHash
+        d.metadata.conversationId ?? "",
+        d.metadata.chunkHash ?? ""
       ))
     );
     
@@ -190,7 +190,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
           $vector: vectors[newChunkIndex],
           text: doc.pageContent,
           metadata: {
-            id: fileName + conversationId,
+            id:fileName+conversationId,
             source: fileName,
             chunkIndex: idx,
             userId: userId || undefined,

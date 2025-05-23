@@ -39,7 +39,7 @@ export async function ensureCollection() {
     });
     console.log("✅ Collection ready");
   } catch (e) {
-    if (!e.message.includes("already exists")) throw e;
+    if (!(e instanceof Error) || !e.message.includes("already exists")) throw e;
   }
 }
 
