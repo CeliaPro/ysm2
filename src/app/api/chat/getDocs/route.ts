@@ -1,6 +1,5 @@
-// app/api/chat/getDocs/route.ts
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -15,12 +14,13 @@ export async function GET(req: NextRequest) {
       where: {
         conversationId,
         metadata: {
-          path: ['event'],
-          equals: 'upload',
+          equals: {
+            event: "upload",
+          },
         },
       },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: "asc",
       },
     });
 
