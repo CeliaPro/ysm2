@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Dispatch, SetStateAction } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -17,12 +17,17 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { ModeToggle } from '@/components/ui/mode-toggle'
 import Link from 'next/link'
 
-const Navbar: React.FC = () => {
+interface NavbarProps {
+  expand: boolean
+  setExpand: Dispatch<SetStateAction<boolean>>
+}
+
+const Navbar: React.FC<NavbarProps> = ({ expand, setExpand }) => {
   const { user, logout, isAdmin } = useAuth()
-  const [navMenuOpen, setNavMenuOpen] = useState(false)
+  const [navMenuOpen, setNavMenuOpen] = React.useState(false)
 
   const isActive = (path: string) => {
-    // TODO: implement active detection
+    // TODO: implement active detection based on router
     return false
   }
 
@@ -38,8 +43,14 @@ const Navbar: React.FC = () => {
     <header className="flex justify-center sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2 md:gap-4">
-          {/* Mobile nav menu toggle */}
-          <div className="md:hidden">
+          {/* Mobile toggles */}
+          <div className="md:hidden flex items-center gap-2">
+            {/* AI sidebar toggle */}
+            <Button variant="ghost" size="icon" onClick={() => setExpand(!expand)}>
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle AI sidebar</span>
+            </Button>
+            {/* Nav links menu toggle */}
             <Sheet open={navMenuOpen} onOpenChange={setNavMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -91,6 +102,7 @@ const Navbar: React.FC = () => {
           </nav>
         </div>
 
+        {/* Profile & Settings */}
         <div className="flex items-center gap-2">
           <ModeToggle />
 
@@ -102,7 +114,7 @@ const Navbar: React.FC = () => {
                   <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
-            </DropdownMenuTrigger>
+              </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
@@ -121,7 +133,8 @@ const Navbar: React.FC = () => {
         </div>
       </div>
     </header>
-)
+  )
+
 }
 
 export default Navbar
