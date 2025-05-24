@@ -1,86 +1,78 @@
-// app/api/pdf/upload/route.ts
-import { writeFile } from 'fs/promises'
-import path from 'path'
-import { uploadDocumentFile } from '@/lib/astra/upload'
-import { addMessageToConversation } from '@/lib/actions/conversations/conversation'
-import { ChatRole } from '@prisma/client'
-import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'crypto'
-import { withAuthentication } from '@/app/utils/auth.utils' // Adjust if needed
+// app/api/chat/upload/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { streamText } from 'ai';
+import { withAuthentication } from '@/app/utils/auth.utils';
+import { addMessageToConversation } from '@/lib/actions/conversations/conversation';
+import { ChatRole } from '@prisma/client';
 
-export const config = {
-  api: { bodyParser: false },
+/**
+ * Lazily imports the AI provider factory from @ai-sdk/openai
+ */
+async function getAIProviderFactory(): Promise<(model: string) => import('ai').LanguageModelV1> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) {
+    throw new Error('Missing OPENAI_API_KEY');
+  }
+  // Dynamically import to defer until runtime
+  const { openai } = await import('@ai-sdk/openai');
+  return openai;
 }
 
-const uploadedFiles: { originalName: string; processingId: string }[] = []
-
 export const POST = withAuthentication(async (req: NextRequest, user) => {
-  const form = await req.formData()
-  const files = form.getAll('files') as File[]
-  const conversationId = form.get('conversationId')?.toString() ?? null
-
-  if (!files.length) {
-    return NextResponse.json({ error: 'No files provided' }, { status: 400 })
+  // Initialize AI provider at request time
+  let aiProvider: (model: string) => import('ai').LanguageModelV1;
+  try {
+    aiProvider = await getAIProviderFactory();
+  } catch (err: any) {
+    console.error('AI init error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 
+  // Parse request
+  const { messages, conversationId } = await req.json();
   if (!conversationId) {
-    return NextResponse.json(
-      { error: 'Missing conversationId' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
+  }
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return NextResponse.json({ error: 'No messages provided' }, { status: 400 });
   }
 
-  for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const processingId = randomUUID()
-    const tempName = `${Date.now()}-${processingId}-${file.name}`
-    const tempDir = path.join(process.cwd(), 'lib/temp')
-    const tempPath = path.join(tempDir, tempName)
+  // Generate AI stream
+  const stream = await streamText({
+    model: aiProvider('gpt-4o-mini'),
+    messages: messages.map(m => ({ role: m.role.toLowerCase(), content: m.content })),
+  });
 
-    await writeFile(tempPath, buffer)
+  const encoder = new TextEncoder();
+  let fullResponse = '';
 
-    // Upload and embed
-    await uploadDocumentFile({
-      filePath: tempPath,
-      fileName: file.name,
-      userId: user.id,
-      conversationId,
-      metadata: {
-        originalName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: user.id,
-        conversationId,
-        processingId,
-      },
-    })
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of stream.textStream) {
+          fullResponse += chunk;
+          controller.enqueue(encoder.encode(chunk));
+        }
+        // Save assistant message
+        await addMessageToConversation({
+          content: fullResponse,
+          role: ChatRole.ASSISTANT,
+          conversationId,
+          userId: user.id,
+          metadata: { timestamp: Date.now(), hasContext: false, environment: process.env.NODE_ENV },
+        });
+        controller.close();
+      } catch (err) {
+        console.error('Stream error:', err);
+        controller.error(err);
+      }
+    },
+    cancel() {
+      stream.textStream.cancel();
+    },
+  });
 
-    // Log upload as a system message
-    await addMessageToConversation({
-      conversationId,
-      userId: user.id,
-      role: ChatRole.SYSTEM,
-      content: `[Upload] ${file.name}`,
-      metadata: {
-        event: 'upload',
-        fileSize: file.size,
-        fileType: file.type,
-        originalName: file.name,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: user.id,
-        processingId,
-      },
-    })
-
-    uploadedFiles.push({
-      originalName: file.name,
-      processingId,
-    })
-  }
-
-  return NextResponse.json({
-    status: 'success',
-    uploadedFiles,
-  })
-}, 'EMPLOYEE') // Adjust minimum role if needed
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+  });
+}, 'EMPLOYEE');
