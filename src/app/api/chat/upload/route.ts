@@ -1,4 +1,7 @@
 // app/api/chat/upload/route.ts
+// Deploy this route as an Edge Function to support streaming
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { streamText } from 'ai';
 import { withAuthentication } from '@/app/utils/auth.utils';
