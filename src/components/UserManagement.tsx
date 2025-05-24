@@ -33,6 +33,12 @@ export default function UserManagement() {
       return
     }
 
+    // <-- NEW: Prevent duplicate invites -->
+    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+      toast.error('Utilisateur existe déjà.')
+      return
+    }
+
     setLoading(true)
     try {
       const response = await fetch('/api/auth/invite', {
@@ -44,12 +50,16 @@ export default function UserManagement() {
 
       if (!response.ok) {
         const { error } = await response.json()
-        throw new Error(error || 'Erreur lors de l\'envoi de l\'invitation')
+        throw new Error(error || 'Erreur lors de l’envoi de l’invitation')
       }
 
       toast.success('Invitation envoyée avec succès !')
       setEmail('')
       setRole('EMPLOYEE')
+
+      // Optionally refetch or append the newly invited user
+      const newUser: User = await response.json()
+      setUsers((prev) => [...prev, newUser])
     } catch (error: any) {
       toast.error(`Erreur : ${error.message}`)
     } finally {
@@ -75,7 +85,9 @@ export default function UserManagement() {
           />
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as 'EMPLOYEE' | 'MANAGER')}
+            onChange={(e) =>
+              setRole(e.target.value as 'EMPLOYEE' | 'MANAGER')
+            }
             className="border rounded-md px-3 py-2"
           >
             <option value="EMPLOYEE">Employé</option>
