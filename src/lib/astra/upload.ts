@@ -4,6 +4,7 @@ import { loadAndSplitExcel } from "./loaderExcel";
 import { generateEmbeddingsBatch } from "./embedding";
 import { addMessageToConversation } from "../actions/conversations/conversation";
 import { ChatRole } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { sha256 } from "@/lib/utils/hash";
 
 // Types précis pour une meilleure sécurité
@@ -14,27 +15,6 @@ export interface SourceEntry {
   pageNumber: number | null;
 }
 
-// Define explicitly what your AstraDB client expects for metadata
-// interface AstraDBMetadata {
-//   source: string;
-//   chunkIndex: number;
-//   userId?: string | null;
-//   conversationId?: string | null;
-//   chunkHash: string;
-//   createdAt: string;
-//   // Additional fields
-//   originalName?: string;
-//   fileSize?: number;
-//   fileType?: string;
-//   uploadedAt?: string;
-//   uploadedBy?: string | null;
-//   processingId?: string;
-//   totalChunks?: number;
-//   pageNumber?: number | null;
-//   sources?: SourceEntry[];
-// }
-
-// Your complete document metadata type
 export interface DocumentMetadata {
   originalName: string;
   fileSize: number;
@@ -53,6 +33,22 @@ export interface DocumentMetadata {
   sources?: SourceEntry[];
 }
 
+// Type pour les métadonnées dans les messages
+export interface MessageMetadata {
+  event: string;
+  originalName: string;
+  fileSize: number;
+  fileType: string;
+  uploadedAt: string;
+  uploadedBy: string | null;
+  processingId: string;
+  id?: string;
+  totalChunks?: number;
+  uniqueChunks?: number;
+  reusedChunks?: number;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 export type RawChunk = {
   pageContent: string
   metadata: {
@@ -64,7 +60,6 @@ export type RawChunk = {
   }
   status?: 'unchanged' | 'added' | 'removed'
 }
-
 
 export interface UploadDocumentFileParams {
   filePath: string;
@@ -82,6 +77,91 @@ interface ChunkUploadResult {
   error?: boolean;
 }
 
+// Type pour le résultat de l'upload de document
+interface UploadDocumentResult {
+  success: boolean;
+  alreadyExists?: boolean;
+  fileName: string;
+  processingId: string;
+  chunks?: number;
+  uniqueChunks?: number;
+  reusedChunks?: number;
+}
+
+// Fonction pour vérifier si un document entier existe déjà
+async function isDocumentAlreadyUploaded(metadata: DocumentMetadata): Promise<boolean> {
+  if (!metadata.conversationId) return false;
+  
+  try {
+    // Recherche dans Prisma un message avec les mêmes caractéristiques pour cette conversation
+    const existingMessages = await prisma.message.findFirst({
+      where: {
+        conversationId: metadata.conversationId,
+        metadata: {
+          path: ["event"],
+          equals: "upload"
+        },
+        AND: [
+          {
+            metadata: {
+              path: ["originalName"],
+              equals: metadata.originalName
+            }
+          },
+          {
+            metadata: {
+              path: ["fileSize"],
+              equals: metadata.fileSize
+            }
+          },
+          {
+            metadata: {
+              path: ["fileType"],
+              equals: metadata.fileType
+            }
+          }
+        ]
+      }
+    });
+
+    return !!existingMessages;
+  } catch (error) {
+    console.error("Erreur lors de la vérification de l'existence du document:", error);
+    return false; // En cas d'erreur, permettre l'upload pour éviter des problèmes
+  }
+}
+
+/**
+ * Récupère les métadonnées d'un document existant
+ */
+async function getExistingDocumentMetadata(metadata: DocumentMetadata): Promise<MessageMetadata | null> {
+  if (!metadata.conversationId) return null;
+  
+  try {
+    const result = await prisma.message.findFirst({
+      where: {
+        conversationId: metadata.conversationId,
+        metadata: {
+          path: ["event"],
+          equals: "upload"
+        },
+        AND: [
+          { metadata: { path: ["originalName"], equals: metadata.originalName } },
+          { metadata: { path: ["fileSize"], equals: metadata.fileSize } }
+        ]
+      },
+      select: {
+        metadata: true
+      }
+    });
+    
+    // Prisma retourne les métadonnées comme une valeur JSON, on le type explicitement
+    return result?.metadata as unknown as MessageMetadata || null;
+  } catch (error) {
+    console.error("Erreur lors de la récupération des métadonnées:", error);
+    return null;
+  }
+}
 
 /**
  * Télécharge et indexe un document avec déduplication optimisée pour Vercel/Next.js
@@ -89,8 +169,7 @@ interface ChunkUploadResult {
  * - Gère efficacement les contraintes de timeout Vercel (10s pour hobby, 60s pour pro)
  * - Robuste face aux erreurs réseau et aux problèmes de connexion
  */
-
-export async function uploadDocumentFile(params: UploadDocumentFileParams) {
+export async function uploadDocumentFile(params: UploadDocumentFileParams): Promise<UploadDocumentResult> {
   const { filePath, fileName, userId, conversationId, metadata } = params;
   
   if (!metadata || !conversationId) {
@@ -98,6 +177,26 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
   }
 
   try {
+    // Vérifier si le document entier existe déjà
+    if (await isDocumentAlreadyUploaded(metadata)) {
+      console.log(`⚠️ Document déjà présent, vectorisation ignorée: ${fileName}`);
+      
+      // Récupérer les stats du document précédent si disponibles
+      const existingMeta = await getExistingDocumentMetadata(metadata);
+      
+      // Retourne les informations sans relancer la vectorisation
+      return {
+        success: true,
+        alreadyExists: true,
+        fileName,
+        processingId: metadata.processingId,
+        chunks: existingMeta?.totalChunks || 0,
+        uniqueChunks: existingMeta?.uniqueChunks || 0,
+        reusedChunks: existingMeta?.reusedChunks || 0
+      };
+    }
+
+    // Si le document n'existe pas, continuer avec la vectorisation
     await ensureCollection();
     const collection = getCollection();
     
@@ -118,26 +217,23 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
     const createKey = (convId: string, hash: string) => `${convId}_${hash}`;
     
     // Récupération des documents existants pour cette conversation
-
-      // Découpe en batchs de 100 pour respecter la limite AstraDB
-      const MAX_IN = 100;
-      type ExistingDoc = {
-        metadata: {
-          chunkHash?: string;
-          conversationId?: string;
-        };
+    const MAX_IN = 100;
+    type ExistingDoc = {
+      metadata: {
+        chunkHash?: string;
+        conversationId?: string;
       };
+    };
 
-      const existingDocs: ExistingDoc[] = [];
+    const existingDocs: ExistingDoc[] = [];
 
-      for (let i = 0; i < hashes.length; i += MAX_IN) {
-        const batch = hashes.slice(i, i + MAX_IN);
-        const batchDocs = await collection
-          .find({ "metadata.conversationId": conversationId,"metadata.chunkHash": { $in: batch } })
-          .toArray();
-        existingDocs.push(...batchDocs);
-      }
-
+    for (let i = 0; i < hashes.length; i += MAX_IN) {
+      const batch = hashes.slice(i, i + MAX_IN);
+      const batchDocs = await collection
+        .find({ "metadata.conversationId": conversationId,"metadata.chunkHash": { $in: batch } })
+        .toArray();
+      existingDocs.push(...batchDocs.map(doc => ({ metadata: doc.metadata })));
+    }
     
     // Set des clés composites existantes
     const existingKeys = new Set(
@@ -173,6 +269,39 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
 
         if (existingKeys.has(key)) {
           reusedCount++;
+
+          // Récupérer le chunk existant avec le même hash pour extraire son vecteur
+          const existingDoc = await collection.findOne({ 
+            "metadata.conversationId": conversationId,
+            "metadata.chunkHash": hash 
+          });
+
+          if (existingDoc && existingDoc.$vector) {
+            const astraDocument = {
+              $vector: existingDoc.$vector,
+              text: doc.pageContent,
+              metadata: {
+                id: fileName + conversationId,
+                source: fileName,
+                chunkIndex: idx,
+                userId: userId || null,
+                conversationId,
+                createdAt: new Date().toISOString(),
+                chunkHash: hash,
+                originalName: metadata.originalName,
+                fileSize: metadata.fileSize,
+                fileType: metadata.fileType,
+                uploadedAt: metadata.uploadedAt,
+                uploadedBy: metadata.uploadedBy,
+                processingId: metadata.processingId, // << ici le nouveau processingId
+                totalChunks: docs.length,
+                pageNumber: doc.metadata.pageNumber ?? null
+              }
+            };
+
+            await collection.insertOne(astraDocument);
+          }
+
           return {
             chunkIndex: idx,
             reused: true,
@@ -180,6 +309,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
             text: doc.pageContent.substring(0, 100) + "..."
           };
         }
+
 
         // Trouver l'index dans newChunks pour récupérer le bon vecteur
         const newChunkIndex = newChunks.findIndex(
@@ -190,10 +320,10 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
           $vector: vectors[newChunkIndex],
           text: doc.pageContent,
           metadata: {
-            id:fileName+conversationId,
+            id: fileName + conversationId,
             source: fileName,
             chunkIndex: idx,
-            userId: userId || undefined,
+            userId: userId || null,
             conversationId,
             createdAt: new Date().toISOString(),
             chunkHash: hash,
@@ -274,4 +404,3 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams) {
     throw error;
   }
 }
-
