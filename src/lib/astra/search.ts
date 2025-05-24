@@ -1,51 +1,52 @@
+// lib/astra/search.ts
 import OpenAI from "openai";
-import { db } from "./client";
+import { getCollection } from "./client";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+/**
+ * Retrieves relevant document snippets for a query from Astra DB.
+ */
+export async function getContextFromQuery(
+  query: string,
+  conversationId: string
+): Promise<string> {
+  // Lazy-instantiate OpenAI client at runtime
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-export async function getContextFromQuery(query: string, conversationId: string): Promise<string> {
-    try {
-      // 1️⃣ Generate embedding
-      const embedRes = await openai.embeddings.create({
-        model: "text-embedding-3-small",
-        input: query,
-        encoding_format: "float",
-      });
-      
-      const vector = embedRes.data[0].embedding;
-  
-      // 2️⃣ Query AstraDB with correct vector search syntax
-      const col = db.collection(process.env.ASTRA_DB_COLLECTION!);
-      const results = await col
-        .find(
-          { "metadata.conversationId": conversationId },
-          { 
-            sort: {
-              $vector: vector
-            },
-            limit: 5
-          }
-        )
-        .toArray();
+  try {
+    // 1️⃣ Generate embedding
+    const embedRes = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: query,
+      encoding_format: "float",
+    });
+    const vector = embedRes.data[0].embedding;
 
-        console.log("Vector search results:", results);
-        
-      // 3️⃣ Format results
-      if (!results.length) {
-        console.log('No relevant documents found for conversation:', conversationId);
-        return "No relevant context found.";
-      }
+    // 2️⃣ Query AstraDB collection
+    const col = getCollection();
+    const results = await col
+      .find(
+        { "metadata.conversationId": conversationId },
+        {
+          sort: { $vector: vector },
+          limit: 5,
+        }
+      )
+      .toArray();
 
-      return results
-        .map((doc) => {
-          const metadata = doc.metadata as { source?: string; chunkIndex?: number };
-          const chunkIndex = metadata.chunkIndex !== undefined ? metadata.chunkIndex + 1 : "N/A";
-          return `From ${metadata.source} (Part ${chunkIndex}):\n${doc.text}`;
-        })
-        .join("\n\n---\n\n");
+    console.log("Vector search results:", results);
 
-    } catch (e) {
-      console.error("Vector search failed:", e);
-      throw e;
-    }
+    // 3️⃣ Format results
+    if (!results.length) return "No relevant context found.";
+
+    return results
+      .map((doc) => {
+        const md = doc.metadata;
+        const idx = md.chunkIndex !== undefined ? md.chunkIndex + 1 : "N/A";
+        return `From ${md.source} (Part ${idx}):\n${doc.text}`;
+      })
+      .join("\n\n---\n\n");
+  } catch (e) {
+    console.error("Vector search failed:", e);
+    throw e;
+  }
 }

@@ -1,48 +1,62 @@
 import { DataAPIClient } from "@datastax/astra-db-ts";
 
-// Validation des variables d'environnement
-const envVars = [
-  'ASTRA_DB_NAMESPACE', 
-  'ASTRA_DB_COLLECTION',
-  'ASTRA_DB_API_ENDPOINT',
-  'ASTRA_DB_APPLICATION_TOKEN'
-] as const;
+// Lazy-init and validate Astra DB client at request time
+let cachedDb: ReturnType<DataAPIClient["db"]> | null = null;
 
-envVars.forEach(varName => {
-  if (!process.env[varName]) throw new Error(`Missing ${varName}`);
-});
+/**
+ * Returns a configured Astra Collection, initializing the client if needed.
+ * Throws an error if any required environment variable is missing.
+ */
+function getDb() {
+  if (cachedDb) {
+    return cachedDb;
+  }
 
-export const astraClient = new DataAPIClient(process.env.ASTRA_DB_APPLICATION_TOKEN!);
-export const db = astraClient.db(process.env.ASTRA_DB_API_ENDPOINT!, {
-  keyspace: process.env.ASTRA_DB_NAMESPACE!
-});
+  const endpoint    = process.env.ASTRA_DB_API_ENDPOINT;
+  const token       = process.env.ASTRA_DB_APPLICATION_TOKEN;
+  const keyspace    = process.env.ASTRA_DB_NAMESPACE;
+  const collection  = process.env.ASTRA_DB_COLLECTION;
 
-export type AstraDoc = {
-  $vector: number[];
-  text: string;
-  metadata: {
-    source: string;
-    chunkIndex: number;
-    userId?: string;
-    conversationId?: string;
-    createdAt: string;
-    chunkHash?: string; 
-  };
-};
+  if (!endpoint) {
+    throw new Error("Missing ASTRA_DB_API_ENDPOINT");
+  }
+  if (!token) {
+    throw new Error("Missing ASTRA_DB_APPLICATION_TOKEN");
+  }
+  if (!keyspace) {
+    throw new Error("Missing ASTRA_DB_NAMESPACE");
+  }
+  if (!collection) {
+    throw new Error("Missing ASTRA_DB_COLLECTION");
+  }
+
+  const client = new DataAPIClient(token);
+  cachedDb = client.db(endpoint, { keyspace });
+  return cachedDb;
+}
+
+/**
+ * Ensures the target collection exists, creating it if absent.
+ */
 export async function ensureCollection() {
+  const db = getDb();
   try {
     await db.createCollection(process.env.ASTRA_DB_COLLECTION!, {
-      vector: { 
-        dimension: 1536, 
-        metric: "dot_product" 
-      },
+      vector: { dimension: 1536, metric: "dot_product" },
     });
     console.log("✅ Collection ready");
   } catch (e) {
-    if (!(e instanceof Error) || !e.message.includes("already exists")) throw e;
+    // Ignore "already exists" errors
+    if (!(e instanceof Error) || !e.message.includes("already exists")) {
+      throw e;
+    }
   }
 }
 
+/**
+ * Retrieves the Astra collection for vector queries.
+ */
 export function getCollection() {
-  return db.collection<AstraDoc>(process.env.ASTRA_DB_COLLECTION!);
+  const db = getDb();
+  return db.collection(process.env.ASTRA_DB_COLLECTION!);
 }
