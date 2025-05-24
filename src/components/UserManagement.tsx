@@ -18,17 +18,18 @@ export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [name, setName] = useState('Test')
   const [email, setEmail] = useState('test@gmail.com')
+  const [role, setRole] = useState<'EMPLOYEE' | 'MANAGER'>('EMPLOYEE')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/users', { credentials: 'include' }).then((res) => {
-      res.json().then((jsn) => setUsers(jsn))
-    })
+    fetch('/api/users', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((jsn) => setUsers(jsn))
   }, [])
 
   const handleSendInvite = async () => {
     if (!email || !name) {
-      toast.warning('Veuillez saisir un email.')
+      toast.warning('Veuillez saisir un nom et un email.')
       return
     }
 
@@ -37,20 +38,18 @@ export default function UserManagement() {
       const response = await fetch('/api/auth/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          email,
-        }),
+        body: JSON.stringify({ name, email, role }),
         credentials: 'include',
       })
 
       if (!response.ok) {
         const { error } = await response.json()
-        throw new Error(error || "Erreur lors de l'envoi de l'invitation")
+        throw new Error(error || 'Erreur lors de l\'envoi de l\'invitation')
       }
 
       toast.success('Invitation envoyée avec succès !')
       setEmail('')
+      setRole('EMPLOYEE')
     } catch (error: any) {
       toast.error(`Erreur : ${error.message}`)
     } finally {
@@ -75,15 +74,16 @@ export default function UserManagement() {
             onChange={(e) => setEmail(e.target.value)}
           />
           <select
-            defaultValue="EMPLOYEE"
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'EMPLOYEE' | 'MANAGER')}
             className="border rounded-md px-3 py-2"
           >
             <option value="EMPLOYEE">Employé</option>
+            <option value="MANAGER">Manager</option>
           </select>
           <Button
             onClick={handleSendInvite}
             disabled={loading}
-            // className="md:col-span-2"
             style={{ cursor: 'pointer' }}
           >
             {loading ? (
