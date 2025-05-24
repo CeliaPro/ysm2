@@ -18,7 +18,7 @@ enum ProjectRole {
   OWNER
   EDITOR
   VIEWER
-  MANAGER // ✅ Restored if used in the DB
+  MANAGER
 }
 
 enum ChatRole {
@@ -34,13 +34,11 @@ model User {
   name      String?
   role      Role     @default(EMPLOYEE)
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime @updatedAt
 
-  // ✅ Preserved legacy fields
   isDeleted Boolean?
   user_role String?
 
-  // Relations
   projects      ProjectMember[]
   documents     Document[]
   invites       Invite[]        @relation("Inviter")
@@ -55,7 +53,6 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // ✅ Preserved if still used
   archived Boolean @default(false)
 
   members       ProjectMember[]
@@ -68,9 +65,7 @@ model ProjectMember {
   userId    String
   projectId String
   role      ProjectRole
-
-  // ✅ Preserved if used
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 
   user    User    @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
@@ -102,7 +97,7 @@ model Document {
 
 model Tag {
   id        String     @id @default(cuid())
-  name      String     @unique(map: "Tag_name_unique") // ✅ Fix duplicate constraint name
+  name      String     @unique(map: "Tag_name_unique")
   documents Document[] @relation("DocumentTags")
 }
 
@@ -118,7 +113,7 @@ model StoragePolicy {
   id            String  @id @default(cuid())
   projectId     String  @unique
   maxSizeMb     Int
-  allowedTypes  String? // comma-separated
+  allowedTypes  String?
   retentionDays Int?
 
   project Project @relation(fields: [projectId], references: [id])
@@ -144,7 +139,7 @@ model Conversation {
   updatedAt DateTime @updatedAt
 
   user     User      @relation(fields: [userId], references: [id])
-  messages Message[]
+  messages Message[] // Messages will be cascade‐deleted
 }
 
 model Message {
@@ -162,5 +157,5 @@ model Message {
   conversationId String
 
   user         User?        @relation(fields: [userId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
