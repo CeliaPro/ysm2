@@ -41,10 +41,13 @@ export interface AppContextType {
   conversations: Conversation[]
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>
   selectedConversation: Conversation | null
-  setSelectedConversation: React.Dispatch<React.SetStateAction<Conversation | null>>
+  setSelectedConversation: React.Dispatch<
+    React.SetStateAction<Conversation | null>
+  >
   fetchUsersConversations: () => Promise<void>
   createNewConversation: () => Promise<Conversation | null>
   appendMessage: (conversationId: string, message: Message) => void
+  removeConversation: (conversationId: string) => void
   isLoading: boolean
 }
 
@@ -69,21 +72,36 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const appendMessage = useCallback(
     (conversationId: string, message: Message) => {
       // Update the selected conversation if it matches
-      setSelectedConversation(prev =>
+      setSelectedConversation((prev) =>
         prev && prev.id === conversationId
           ? { ...prev, messages: [...prev.messages, message] }
           : prev
       )
       // Update it in the conversation list
-      setConversations(list =>
-        list.map(c =>
+      setConversations((list) =>
+        list.map((c) =>
           c.id === conversationId
             ? { ...c, messages: [...c.messages, message] }
             : c
         )
       )
     },
-    [setSelectedConversation, setConversations]
+    []
+  )
+
+  // -------- Remove a conversation helper --------
+  const removeConversation = useCallback(
+    (conversationId: string) => {
+      // Remove from list
+      setConversations((list) =>
+        list.filter((c) => c.id !== conversationId)
+      )
+      // Clear selection if it was the one removed
+      setSelectedConversation((sel) =>
+        sel?.id === conversationId ? null : sel
+      )
+    },
+    []
   )
 
   // -------- Create a new chat ----------
@@ -118,7 +136,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           ...data.data,
           messages: sortedMessages,
         }
-        setConversations(prev => [newConv, ...prev])
+        setConversations((prev) => [newConv, ...prev])
         setSelectedConversation(newConv)
         return newConv
       } catch (err) {
@@ -153,10 +171,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const sorted = data.data
         .sort(
           (a, b) =>
-            new Date(b.updatedAt).getTime() -
-            new Date(a.updatedAt).getTime()
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         )
-        .map(c => ({
+        .map((c) => ({
           ...c,
           messages:
             c.messages?.sort(
@@ -199,6 +216,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         fetchUsersConversations,
         createNewConversation,
         appendMessage,
+        removeConversation,
         isLoading,
       }}
     >
