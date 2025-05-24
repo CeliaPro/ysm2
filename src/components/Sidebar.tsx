@@ -4,13 +4,13 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 
-import assets from '@/app/assets/assets'
+import assets from '@/app/assets/assets'                  // <-- make sure this matches where images live
 import ChatLabel from './ChatLabel'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppContext } from '@/contexts/AppContext'
-import { toast } from 'sonner'
 
+// ---------------- types -----------------
 interface MenuState {
   id: string | number
   open: boolean
@@ -21,49 +21,12 @@ interface SidebarProps {
   setExpand: (value: boolean) => void
 }
 
+// ---------------- component --------------
 const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
-  const { user } = useAuth()
-  const {
-    conversations,
-    setConversations,
-    selectedConversation,
-    setSelectedConversation,
-    createNewConversation,
-    removeConversation,
-  } = useAppContext()
+  const { user } = useAuth()                         // global user
+  const { conversations, createNewConversation } = useAppContext()
 
   const [openMenu, setOpenMenu] = useState<MenuState>({ id: 0, open: false })
-
-  // Delete handler
-  const handleDelete = async (conversationId: string) => {
-    if (!user) {
-      toast.error('You must be logged in to delete a conversation')
-      return
-    }
-    try {
-      const res = await fetch('/api/chat/delete', {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId }),
-      })
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Deletion failed')
-      }
-      // Remove in context
-      removeConversation(conversationId)
-      // If it was selected, clear or pick another
-      if (selectedConversation?.id === conversationId) {
-        const remaining = conversations.filter(c => c.id !== conversationId)
-        setSelectedConversation(remaining[0] ?? null)
-      }
-      toast.success('Conversation deleted')
-    } catch (err: any) {
-      console.error('Delete error:', err)
-      toast.error(err.message || 'Could not delete conversation')
-    }
-  }
 
   return (
     <div
@@ -71,9 +34,9 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
         expand ? 'p-4 w-64' : 'md:w-20 w-0 max-md:overflow-hidden'
       }`}
     >
-      {/* Top */}
+      {/* ---------- top ---------- */}
       <div>
-        {/* Logo & toggle */}
+        {/* logo & toggle */}
         <div
           className={`flex ${
             expand ? 'flex-row gap-10' : 'flex-col items-center gap-8'
@@ -84,6 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
             src={expand ? assets.logo_text : assets.logo}
             alt="logo"
           />
+
           <div
             onClick={() => setExpand(!expand)}
             className="group relative flex items-center justify-center hover:bg-gray-500/20 transition-all duration-300 h-9 w-12 px-2 rounded-lg cursor-pointer"
@@ -114,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
           </div>
         </div>
 
-        {/* New chat */}
+        {/* new chat */}
         <button
           onClick={() => createNewConversation()}
           className={`mt-8 flex items-center justify-center cursor-pointer ${
@@ -128,38 +92,82 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
             src={assets.chat}
             alt="chat"
           />
+
+          {/* tooltip (mobile) */}
+          <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+            New chat
+            <div className="w-3 h-3 bg-black rotate-45 absolute left-4 -top-1.5 -translate-x-1/2" />
+          </div>
+
           {expand && <p className="text-white font-medium">New chat</p>}
         </button>
 
-        {/* Recents list */}
-        <div className={`mt-8 text-white/25 text-sm ${expand ? 'block' : 'hidden'}`}>
+        {/* recents list */}
+        <div
+          className={`mt-8 text-white/25 text-sm ${
+            expand ? 'block' : 'hidden'
+          }`}
+        >
           <p className="my-1">Recents</p>
-          {conversations.map(c => (
-            <div key={c.id} className="flex items-center justify-between">
-              <ChatLabel
-                title={c.title || 'New Chat'}
-                id={c.id}
-                openMenu={openMenu}
-                setOpenMenu={setOpenMenu}
-              />
-              {/* Delete button */}
-              {expand && (
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="p-1 hover:bg-red-600/30 rounded"
-                  title="Delete conversation"
-                >
-                  <span className="text-red-400 hover:text-red-600">🗑️</span>
-                </button>
-              )}
-            </div>
+          {conversations.map((c) => (
+            <ChatLabel
+              key={`chat-${c.id}`}
+              title={c.title || 'New Chat'}
+              id={c.id}
+              openMenu={openMenu}
+              setOpenMenu={setOpenMenu}
+            />
           ))}
         </div>
       </div>
 
-      {/* Bottom (settings & profile) */}
+      {/* ---------- bottom ---------- */}
       <div>
-        {/* ... unchanged */}
+        {/* Get-app item */}
+        <div
+          className={`flex items-center cursor-pointer group relative ${
+            expand
+              ? 'gap-3 text-white/80 text-sm p-2.5 border border-gray-700 rounded-lg hover:bg-white/10'
+              : 'h-10 w-10 mx-auto hover:bg-gray-500/30 rounded-lg'
+          }`}
+        >
+          <Image
+            className={expand ? 'w-5' : 'w-6.5 mx-auto'}
+            src={assets.setting}
+            alt="settings"
+          />
+          <div
+            className={`absolute -top-60 pb-8 ${
+              !expand && '-right-40'
+            } opacity-0 group-hover:opacity-100 hidden group-hover:block transition`}
+          >
+            <div className="relative w-max bg-black text-white text-sm p-3 rounded-lg shadow-lg">
+              <Image src={assets.qrcode} alt="qrcode" className="w-44" />
+              <p>Scan to get YMS_BIM APP</p>
+              <div
+                className={`w-3 h-3 absolute bg-black rotate-45 ${
+                  expand ? 'right-1/2' : 'left-4'
+                } -bottom-1.5`}
+              />
+            </div>
+          </div>
+          {expand && (
+            <>
+              <span>Get APP</span>
+              <Image alt="new" src={assets.new_icone} className="w-5" />
+            </>
+          )}
+        </div>
+
+        {/* profile */}
+        <div
+          className={`flex items-center ${
+            expand ? 'hover:bg-white/10 rounded-lg' : 'justify-center w-full'
+          } gap-3 text-white/60 text-sm p-2 mt-2 cursor-pointer`}
+        >
+          <Image src={assets.user_icone} alt="profile" className="w-7" />
+          {expand && <span>{user?.name || 'My Profile'}</span>}
+        </div>
       </div>
     </div>
   )
