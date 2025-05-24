@@ -1,10 +1,8 @@
-export const maxDuration = 60;
-
+// app/api/pdf/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { uploadDocumentFile } from '@/lib/astra/upload';
 import { randomUUID } from 'crypto';
 import { withAuthentication } from '@/app/utils/auth.utils'; // Adjust path if needed
 
@@ -13,6 +11,9 @@ export const config = {
 };
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
+  // Dynamically import to defer any env-based errors until runtime
+  const { uploadDocumentFile } = await import('@/lib/astra/upload');
+
   const tempDir = path.join(os.tmpdir(), 'document-uploads');
 
   try {
@@ -34,7 +35,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       );
     }
 
-    // Metadata for file
+    // Prepare metadata
     const metadata = {
       originalName: file.name,
       fileSize: file.size,
@@ -45,15 +46,18 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       processingId: randomUUID(),
     };
 
+    // Ensure temp directory exists
     await fs.mkdir(tempDir, { recursive: true });
 
     const tempFileName = `${Date.now()}-${metadata.processingId}-${file.name}`;
     const tempFilePath = path.join(tempDir, tempFileName);
 
     try {
+      // Write to temp file
       const buffer = Buffer.from(await file.arrayBuffer());
       await fs.writeFile(tempFilePath, buffer);
 
+      // Upload & embed document
       await uploadDocumentFile({
         filePath: tempFilePath,
         fileName: file.name,
@@ -62,38 +66,27 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         metadata,
       });
 
-      return NextResponse.json({
-        success: true,
-        metadata,
-      });
-    } catch (error) {
+      // Return success and metadata
+      return NextResponse.json({ success: true, metadata });
+    } catch (error: any) {
       console.error('File processing error:', error);
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : 'File processing failed',
-        },
+        { success: false, error: error.message || 'File processing failed' },
         { status: 500 }
       );
     } finally {
+      // Clean up temp file
       try {
         await fs.unlink(tempFilePath);
       } catch (e) {
         console.error('Failed to delete temp file:', e);
       }
     }
-  } catch (err) {
-    console.error('Vectorization error:', err);
+  } catch (err: any) {
+    console.error('PDF upload error:', err);
     return NextResponse.json(
-      {
-        success: false,
-        error:
-          err instanceof Error ? err.message : 'Internal Server Error',
-      },
+      { success: false, error: err.message || 'Internal Server Error' },
       { status: 500 }
     );
   }
-}, 'EMPLOYEE'); // Or 'MANAGER' / 'ADMIN' if needed
+}, 'EMPLOYEE');
