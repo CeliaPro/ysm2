@@ -1,6 +1,5 @@
 // app/api/chat/upload/route.ts
-// Deploy this route as an Edge Function to support streaming
-export const runtime = 'edge';
+// Run this route on Node.js (Serverless) runtime to support jsonwebtoken and streaming
 
 import { NextRequest, NextResponse } from 'next/server';
 import { streamText } from 'ai';
@@ -16,7 +15,6 @@ async function getAIProviderFactory(): Promise<(model: string) => import('ai').L
   if (!key) {
     throw new Error('Missing OPENAI_API_KEY');
   }
-  // Dynamically import to defer until runtime
   const { openai } = await import('@ai-sdk/openai');
   return openai;
 }
@@ -31,7 +29,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 
-  // Parse request
+  // Parse request body
   const { messages, conversationId } = await req.json();
   if (!conversationId) {
     return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
