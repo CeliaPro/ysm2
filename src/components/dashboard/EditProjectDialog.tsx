@@ -69,9 +69,10 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
        storageUsed:    data.storageUsed    ?? project.storageUsed!,
        storageLimit:   data.storageLimit   ?? project.storageLimit,
        usagePercentage:data.usagePercentage?? project.usagePercentage!,
-       isArchived:     data.isArchived,
+       archived:     data.isArchived,
        createdAt:      new Date(data.createdAt),
-       lastUpdated:    new Date(data.updatedAt),  // note `updatedAt`
+       updatedAt:    new Date(data.updatedAt),  // note `updatedAt`
+       status:        data.status ?? project.status,
      }
 
       onSaveChanges(body.data)
