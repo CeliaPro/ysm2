@@ -24,10 +24,10 @@ export async function generateDownloadUrl(fileKey: string): Promise<string> {
   const signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour expiry
   return signedUrl;
 }
-    export async function deleteFromS3(fileKey: string): Promise<void> {
-      const command = new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: fileKey,
-      })
-      await s3.send(command)
-}
+//     export async function deleteFromS3(fileKey: string): Promise<void> {
+//       const command = new DeleteObjectCommand({
+//         Bucket: bucketName,
+//         Key: fileKey,
+//       })
+//       await s3.send(command)
+// }
