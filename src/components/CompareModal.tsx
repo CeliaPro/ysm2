@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/aiUi/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, FileText, XCircle, Check, RefreshCw } from 'lucide-react';
 import { Fragment } from 'react';
-import { Input } from "@/components/ui/aiUi/input";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/aiUi/badge";
 import { Spinner } from "@/components/ui/aiUi/spinner"; // Ajoutez ce composant si nécessaire

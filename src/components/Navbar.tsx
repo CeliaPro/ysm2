@@ -2,11 +2,14 @@
 
 import React, {
   useState,
+  useRef,
+  useEffect,
   Dispatch,
   SetStateAction,
   ReactNode,
 } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -31,7 +34,6 @@ import {
 } from 'lucide-react'
 
 export interface NavbarProps {
-  /** Controls your AI sidebar */
   expand?: boolean
   setExpand?: Dispatch<SetStateAction<boolean>>
 }
@@ -48,58 +50,81 @@ const Navbar: React.FC<NavbarProps> = ({
   const setExpand = propSetExpand ?? setLocalExpand
 
   // Sheet state for nav links on mobile
-  const [isNavSheetOpen, setIsNavSheetOpen] =
-    useState<boolean>(false)
+  const [isNavSheetOpen, setIsNavSheetOpen] = useState<boolean>(false)
+
+  // Scroll-to-hide state
+  const [hidden, setHidden] = useState(false)
+  const lastScroll = useRef(0)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScroll = window.scrollY
+      if (currentScroll > lastScroll.current && currentScroll > 30) {
+        setHidden(true)
+      } else {
+        setHidden(false)
+      }
+      lastScroll.current = currentScroll
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Active link highlighting
+  const pathname = usePathname()
+  const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
   // Define your nav items
-const navItems: {
-  name: string
-  path: string
-  icon: ReactNode
-  showAlways?: boolean
-  showIf?: boolean
-}[] = [
-  {
-    name: 'Dashboard',
-    path: '/dashboard',
-    icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-    showAlways: true,
-  },
-  {
-    name: 'Analyses',
-    path: '/dashboard/analytics',
-    icon: <TrendingUp className="h-4 w-4 mr-2" />,
-    showAlways: true,
-  },
-  {
-    name: 'Documents',
-    path: '/documents',
-    icon: <FileText className="h-4 w-4 mr-2" />,
-    showAlways: true,
-  },
-  {
-    name: 'AI Assistant',
-    path: '/ai',
-    icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-    showAlways: true,
-  },
-  {
-    name: 'Collaborateurs',
-    path: '/users',
-    icon: <FolderClosed className="h-4 w-4 mr-2" />,
-    showIf: isAdmin(),
-  },
-]
+  const navItems: {
+    name: string
+    path: string
+    icon: ReactNode
+    showAlways?: boolean
+    showIf?: boolean
+  }[] = [
+    {
+      name: 'Dashboard',
+      path: '/dashboard',
+      icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
+      name: 'Analyses',
+      path: '/dashboard/analytics',
+      icon: <TrendingUp className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
+      name: 'Documents',
+      path: '/documents',
+      icon: <FileText className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
+      name: 'AI Assistant',
+      path: '/ai',
+      icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
+      name: 'Collaborateurs',
+      path: '/users',
+      icon: <FolderClosed className="h-4 w-4 mr-2" />,
+      showIf: isAdmin(),
+    },
+  ]
 
   const filteredNavItems = navItems.filter(
     (item) => item.showAlways || item.showIf
   )
 
-  // Stub for active-link highlighting
-  const isActive = (path: string) => false
-
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      className={`sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60
+        transition-transform duration-300
+        ${hidden ? '-translate-y-full' : 'translate-y-0'}
+      `}
+    >
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
           {/* AI‐sidebar toggle (mobile only) */}
@@ -197,8 +222,8 @@ const navItems: {
                 href={item.path}
                 className={`flex items-center rounded-md px-3 py-2 text-sm transition-colors ${
                   isActive(item.path)
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent hover:text-accent-foreground'
+                       ? 'bg-blue-600 text-white shadow'
+                      : 'hover:bg-blue-100 hover:text-blue-900'
                 }`}
               >
                 {item.icon}

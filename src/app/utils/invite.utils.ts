@@ -94,8 +94,8 @@ export function generateInviteEmailParams(
 </head>
 <body>
   <div class="container">
-     <img src="${logoUrl}" width="100" alt="YSM Logo" />
-    " width="100" alt="YSM Logo" />
+     <Image src="${logoUrl}" width="100" alt="YSM Logo" />
+     />
     <hr />
     <h1>Bonjour ${name},</h1>
     <p>

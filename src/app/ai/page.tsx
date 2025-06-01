@@ -64,6 +64,14 @@ const AiPage: React.FC = () => {
             />
           </div>
 
+          {/* CompareModal (PORTAL STYLE, overlays everything when open) */}
+          <CompareModal
+            open={openCompare}
+            onClose={() => setOpenCompare(false)}
+            conversationId={selectedConversation?.id || ''}
+            //modalOffset={80} // Change to your preferred offset
+          />
+
           {/* Welcome or messages */}
           {noMessages ? (
             <>
@@ -79,18 +87,17 @@ const AiPage: React.FC = () => {
               className="relative flex flex-col items-center justify-start w-full mt-20 max-h-screen overflow-y-auto"
             >
               {/* Conversation header */}
-              <div className="fixed top-8 flex items-center gap-3 mb-6 z-50 bg-[#292a2d] px-4 py-2 rounded-lg shadow-md">
+              <div className="flex items-center gap-3 mb-6 bg-[#292a2d] px-4 py-2 rounded-lg shadow-md sticky top-0 z-10">
                 <p className="border border-transparent hover:border-gray-500/50 py-1 px-2 rounded-lg font-semibold">
                   {selectedConversation?.title}
                 </p>
-                <button onClick={() => setOpenCompare(true)}>
-                  📎Compare Documents
+                <button
+                  onClick={() => setOpenCompare(true)}
+                  className="ml-2 bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors text-xs font-semibold"
+                  style={{ border: '1px solid #555', background: '#232427' }}
+                >
+                  📎 Compare Documents
                 </button>
-                <CompareModal
-                  open={openCompare}
-                  onClose={() => setOpenCompare(false)}
-                  conversationId={selectedConversation!.id}
-                />
               </div>
 
               {/* Messages list */}
