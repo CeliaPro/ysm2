@@ -344,12 +344,35 @@ export default function UserManagement() {
     }
   }
 
-  const handleResetPassword = async (userId: string) => {
-    toast.info(
-      'Fonctionnalité à implémenter : envoi du reset password pour ' + userId
-    )
-    // await fetch(`/api/users/${userId}/reset-password`, { method: 'POST', credentials: 'include' })
+const handleResetPassword = async (userId: string) => {
+  const user = users.find((u) => u.id === userId)
+  if (!user) {
+    toast.error('Utilisateur introuvable.')
+    return
   }
+  try {
+    const response = await fetch('/api/auth/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        type: 'RESET', // Tell the backend this is a reset password request
+      }),
+    })
+
+    if (response.ok) {
+      toast.success('Reset password email sent!')
+    } else {
+      const { error } = await response.json()
+      toast.error(error || 'Could not send reset password email.')
+    }
+  } catch (error) {
+    toast.error('Network error.')
+  }
+}
+
 
   const handleEditUser = (user: User) => {
     setEditUser(user)

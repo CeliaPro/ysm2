@@ -69,25 +69,38 @@ async function main() {
   });
 
   // 📄 Create Document
-  const document1 = await prisma.document.upsert({
-    where: { id: '1' },
-    update: {},
-    create: {
-      id: '1',
-      url: 'https://www.google.com',
-      name: 'Website Mockups',
-      description: 'Initial mockups for website redesign',
-      size: 2048576,
-      type: 'pdf',
-      archived: false,
-      favorite: false,
-      project: { connect: { id: project1.id } },
-      userId: adminUser.id,
-      tags: {
-        create: [{ name: 'design' }, { name: 'mockup' }],
-      },
+  // 📄 Create Document
+const document1 = await prisma.document.upsert({
+  where: { id: '1' },
+  update: {},
+  create: {
+    id: '1',
+    url: 'https://www.google.com',
+    name: 'Website Mockups',
+    description: 'Initial mockups for website redesign',
+    size: 2048576,
+    type: 'pdf',
+    archived: false,
+    favorite: false,
+    userId: adminUser.id,
+    projectId: project1.id,
+    // Optional: updatedById: adminUser.id,
+    // Optional: storageId: someStorageId,
+    tags: {
+      connectOrCreate: [
+        {
+          where: { name: 'design' },
+          create: { name: 'design' },
+        },
+        {
+          where: { name: 'mockup' },
+          create: { name: 'mockup' },
+        },
+      ],
     },
-  });
+  },
+});
+
 
   // 🤖 AI Conversation
   const conversation = await prisma.conversation.create({
