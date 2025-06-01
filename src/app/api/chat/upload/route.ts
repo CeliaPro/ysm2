@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { withAuthentication } from "@/app/utils/auth.utils";
 import { addMessageToConversation } from "@/lib/actions/conversations/conversation";
 import { ChatRole } from "@prisma/client";
+import { logActivity } from '@/app/utils/logActivity';
 
 function getEnv(name: string): string {
   const v = process.env[name];
@@ -19,12 +20,26 @@ export const POST = withAuthentication(
       messages?: { role: string; content: string }[];
     };
     if (!conversationId) {
+      await logActivity({
+        userId: user.id,
+        action: "CHAT_UPLOAD",
+        status: "FAILURE",
+        description: "Missing conversationId",
+        req,
+      });
       return NextResponse.json(
         { success: false, error: "Missing conversationId" },
         { status: 400 }
       );
     }
     if (!Array.isArray(messages) || messages.length === 0) {
+      await logActivity({
+        userId: user.id,
+        action: "CHAT_UPLOAD",
+        status: "FAILURE",
+        description: "No messages provided",
+        req,
+      });
       return NextResponse.json(
         { success: false, error: "No messages provided" },
         { status: 400 }
@@ -46,6 +61,13 @@ export const POST = withAuthentication(
     try {
       apiKey = getEnv("OPENAI_API_KEY");
     } catch (err: any) {
+      await logActivity({
+        userId: user.id,
+        action: "CHAT_UPLOAD",
+        status: "FAILURE",
+        description: `Missing OpenAI API key: ${err.message}`,
+        req,
+      });
       console.error(err);
       return NextResponse.json(
         { success: false, error: err.message },
@@ -66,6 +88,13 @@ export const POST = withAuthentication(
       });
       assistantReply = resp.choices?.[0].message?.content?.trim() ?? "";
     } catch (err) {
+      await logActivity({
+        userId: user.id,
+        action: "CHAT_UPLOAD",
+        status: "FAILURE",
+        description: `OpenAI request failed: ${String(err)}`,
+        req,
+      });
       console.error("OpenAI error:", err);
       return NextResponse.json(
         { success: false, error: "OpenAI request failed" },
@@ -82,7 +111,16 @@ export const POST = withAuthentication(
       metadata: { timestamp: Date.now(), environment: process.env.NODE_ENV! },
     });
 
-    // 6️⃣ Return JSON
+    // 6️⃣ Log SUCCESS
+    await logActivity({
+      userId: user.id,
+      action: "CHAT_UPLOAD",
+      status: "SUCCESS",
+      description: `Uploaded message and received assistant reply in conversation ${conversationId}`,
+      req,
+    });
+
+    // 7️⃣ Return JSON
     return NextResponse.json({ success: true, assistant: assistantReply });
   },
   "EMPLOYEE"

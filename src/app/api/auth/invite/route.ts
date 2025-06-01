@@ -8,6 +8,7 @@ import {
 import { withAuthentication } from '@/app/utils/auth.utils'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { prisma } from '@/lib/prisma'
+import { logActivity } from '@/app/utils/logActivity'
 
 const client = new SESClient({
   region: 'eu-central-1',
@@ -17,7 +18,7 @@ const client = new SESClient({
   },
 })
 
-export const POST = withAuthentication(async (req: NextRequest) => {
+export const POST = withAuthentication(async (req: NextRequest, user) => {
   try {
     // 1) Read from body
     const { email, name, role, projectIds, type } = (await req.json()) as {
@@ -30,6 +31,13 @@ export const POST = withAuthentication(async (req: NextRequest) => {
 
     // 2) Validate role
     if (role !== 'EMPLOYEE' && role !== 'MANAGER') {
+      await logActivity({
+        userId: user.id,
+        action: 'INVITE_USER',
+        status: 'FAILURE',
+        description: `Invalid role "${role}" used for invite`,
+        req,
+      })
       return NextResponse.json(
         { error: 'Invalid role – must be EMPLOYEE or MANAGER' },
         { status: 400 }
@@ -41,6 +49,13 @@ export const POST = withAuthentication(async (req: NextRequest) => {
       type === 'INVITE' &&
       (await prisma.user.findUnique({ where: { email } }))
     ) {
+      await logActivity({
+        userId: user.id,
+        action: 'INVITE_USER',
+        status: 'FAILURE',
+        description: `Tried to invite existing user (${email})`,
+        req,
+      })
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 409 }
@@ -106,11 +121,35 @@ export const POST = withAuthentication(async (req: NextRequest) => {
           status: true,
         },
       })
+
+      // LOG SUCCESSFUL INVITE
+      await logActivity({
+        userId: user.id,
+        action: 'INVITE_USER',
+        status: 'SUCCESS',
+        description: `Invited ${email} (${role})${projectIds && projectIds.length ? ` to projects: ${projectIds.join(', ')}` : ''}`,
+        req,
+      })
+
       return NextResponse.json(newUser)
     } else {
+      await logActivity({
+        userId: user.id,
+        action: 'INVITE_USER',
+        status: 'SUCCESS',
+        description: `Sent invite link to ${email} (${role})`,
+        req,
+      })
       return NextResponse.json({ success: true })
     }
   } catch (err: any) {
+    await logActivity({
+      userId: user?.id,
+      action: 'INVITE_USER',
+      status: 'FAILURE',
+      description: `Invite failed: ${err.message}`,
+      req,
+    })
     console.error('[INVITE_POST_ERROR]', err)
     return NextResponse.json(
       { error: err.message || 'Unknown error occurred' },

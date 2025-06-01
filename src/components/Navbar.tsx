@@ -112,6 +112,12 @@ const Navbar: React.FC<NavbarProps> = ({
       icon: <FolderClosed className="h-4 w-4 mr-2" />,
       showIf: isAdmin(),
     },
+     {
+      name: 'Logs',
+      path: '/logs',
+      icon: <FolderClosed className="h-4 w-4 mr-2" />,
+      showIf: isAdmin(),
+    },
   ]
 
   const filteredNavItems = navItems.filter(

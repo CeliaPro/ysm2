@@ -8,6 +8,7 @@ import {
   InviteType,
 } from '@/app/utils/invite.utils'
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
+import { logActivity } from '@/app/utils/logActivity'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +24,12 @@ export async function POST(req: NextRequest) {
     try {
       payload = extractInvitePayload(token)
     } catch (err: any) {
+      await logActivity({
+        action: 'REDEEM_INVITE',
+        status: 'FAILURE',
+        description: 'Invalid or expired invite token',
+        req,
+      })
       return NextResponse.json(
         { error: 'Invalid or expired invite token' },
         { status: 400 }
@@ -34,12 +41,25 @@ export async function POST(req: NextRequest) {
       where: { email: payload.email },
     })
     if (!user) {
+      await logActivity({
+        action: 'REDEEM_INVITE',
+        status: 'FAILURE',
+        description: `No invite found for email ${payload.email}`,
+        req,
+      })
       return NextResponse.json(
         { error: 'No invite found for this email.' },
         { status: 404 }
       )
     }
     if (payload.type === 'INVITE' && user.status === 'ACTIVE') {
+      await logActivity({
+        userId: user.id,
+        action: 'REDEEM_INVITE',
+        status: 'FAILURE',
+        description: `User already activated for email ${payload.email}`,
+        req,
+      })
       return NextResponse.json(
         { error: 'User already activated.' },
         { status: 409 }
@@ -53,9 +73,17 @@ export async function POST(req: NextRequest) {
         password: await hash(password, 10),
         status: 'ACTIVE',
         lastLogin: new Date(),
-        name: nameFromForm || payload.name || user.name, // <-- add this line
-        // Do NOT change role here; it stays as set during invite!
+        name: nameFromForm || payload.name || user.name,
       },
+    })
+
+    // Log successful invite redemption
+    await logActivity({
+      userId: updated.id,
+      action: 'REDEEM_INVITE',
+      status: 'SUCCESS',
+      description: `User ${updated.email} redeemed invite and activated account`,
+      req,
     })
 
     // 4) set auth cookie & return
@@ -65,6 +93,12 @@ export async function POST(req: NextRequest) {
       role: updated.role,
     })
   } catch (error: any) {
+    await logActivity({
+      action: 'REDEEM_INVITE',
+      status: 'FAILURE',
+      description: `Internal server error: ${error.message}`,
+      req,
+    })
     console.error('Redeem error:', error)
     return NextResponse.json(
       { error: 'Internal Server Error' },

@@ -53,6 +53,28 @@ enum TaskSeverity {
   CRITIQUE
 }
 
+model ActivityLog {
+  id          String     @id @default(uuid())
+  userId      String?                // Nullable: for failed logins (no user found)
+  user        User?      @relation(fields: [userId], references: [id])
+  action      String                  // e.g. "LOGIN", "FAILED_LOGIN", "UPLOAD", "PASSWORD_CHANGE"
+  status      String                  // "SUCCESS" or "FAILURE"
+  description String?                 // Optional: details like "Wrong password", "File: report.pdf"
+  ipAddress   String?
+  device      String?                 // e.g. "Windows 10 - Chrome 124"
+  userAgent   String?                 // Raw UA for extra debugging
+  createdAt   DateTime   @default(now())
+
+  // Indexes for fast queries and filtering
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+
+
+
 model User {
   id        String     @id @default(cuid())
   email     String     @unique
@@ -73,6 +95,7 @@ model User {
   invites       Invite[]        @relation("Inviter")
   conversations Conversation[]
   messages      Message[]
+  activityLogs  ActivityLog[]
 }
 
 model Project {
