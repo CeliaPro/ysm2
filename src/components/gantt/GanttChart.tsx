@@ -93,7 +93,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
       const start = new Date(task.startDate!)
       const end = task.endDate ? new Date(task.endDate) : new Date(task.deadline!)
       const progress = getProgress(task)
-      // dependencies: array of {id, title, ...} or string[]
       let dependsOn = ''
       if (Array.isArray(task.dependencies) && task.dependencies.length > 0) {
         dependsOn = task.dependencies

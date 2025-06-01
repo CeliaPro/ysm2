@@ -1,3 +1,5 @@
+// app/api/tasks/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { TaskStatus, TaskSeverity } from '@prisma/client'
@@ -8,30 +10,31 @@ export const GET = withAuthentication(async (req) => {
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('projectId')
 
-  let tasks
-  if (projectId) {
-    tasks = await prisma.task.findMany({ where: { projectId } })
-  } else {
-    tasks = await prisma.task.findMany()
-  }
+  const tasks = await prisma.task.findMany({
+    where: projectId ? { projectId } : undefined,
+    include: {
+      dependencies: { select: { id: true, title: true } },
+      // If you want to show "dependedBy" add this line:
+      // dependedBy: { select: { id: true, title: true } }
+    }
+  })
 
   return NextResponse.json({ success: true, data: tasks })
 })
 
-// POST /api/tasks
+// POST: Create a task (with dependencies)
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    // Parse date fields (never null, just undefined if not present)
+    // Parse dates
     const startDate = body.startDate ? new Date(body.startDate) : undefined
     const endDate = body.endDate ? new Date(body.endDate) : undefined
     const deadline = body.deadline ? new Date(body.deadline) : undefined
 
-    // For dependencies: array of task IDs
+    // Array of task IDs this task depends on
     const dependencies = Array.isArray(body.dependencies) ? body.dependencies : []
 
-    // Build task creation data, only including optional fields if present
     const taskData: any = {
       title: body.title,
       description: body.description ?? '',
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
       ...(startDate && { startDate }),
       ...(endDate && { endDate }),
       ...(deadline && { deadline }),
-      // For dependencies (many-to-many self relation)
+      // Many-to-many self relation for dependencies
       ...(dependencies.length > 0 && {
         dependencies: {
           connect: dependencies.map((id: string) => ({ id })),
@@ -52,7 +55,10 @@ export async function POST(req: NextRequest) {
 
     const newTask = await prisma.task.create({
       data: taskData,
-      include: { dependencies: true }, // include dependencies for frontend arrows if needed
+      include: {
+        dependencies: { select: { id: true, title: true } },
+        // dependedBy: { select: { id: true, title: true } }
+      },
     })
 
     return NextResponse.json({ success: true, data: newTask })
@@ -72,6 +78,9 @@ export const PUT = withAuthentication(async (req, user) => {
   const data = await req.json()
   if (!id) return NextResponse.json({ success: false, message: "Missing id" }, { status: 400 })
 
+  // If you want to update dependencies as well, handle them here!
+  // For simplicity, only updating basic fields now.
+
   const updated = await prisma.task.update({
     where: { id },
     data: {
@@ -83,6 +92,11 @@ export const PUT = withAuthentication(async (req, user) => {
       deadline: new Date(data.deadline),
       startDate: data.startDate ? new Date(data.startDate) : undefined,
       endDate: data.endDate ? new Date(data.endDate) : undefined
+      // To update dependencies, you'd use set/connect/disconnect
+    },
+    include: {
+      dependencies: { select: { id: true, title: true } },
+      // dependedBy: { select: { id: true, title: true } }
     }
   })
   return NextResponse.json({ success: true, data: updated })

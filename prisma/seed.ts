@@ -82,7 +82,7 @@ async function main() {
       archived: false,
       favorite: false,
       project: { connect: { id: project1.id } },
-      user: { connect: { id: adminUser.id } },
+      userId: adminUser.id,
       tags: {
         create: [{ name: 'design' }, { name: 'mockup' }],
       },
