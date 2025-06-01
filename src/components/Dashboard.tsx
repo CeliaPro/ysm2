@@ -38,9 +38,9 @@ const Dashboard: React.FC = () => {
     storageLimit: prj.storageLimit ?? '',
     usagePercentage: prj.usagePercentage ?? 0,
     status: prj.status ?? 'active', // <--- status added here
-    isArchived: prj.isArchived ?? prj.archived ?? false,
+    archived: prj.isArchived ?? prj.archived ?? false,
     createdAt: prj.createdAt instanceof Date ? prj.createdAt : new Date(prj.createdAt),
-    lastUpdated: prj.updatedAt
+    updatedAt: prj.updatedAt
       ? prj.updatedAt instanceof Date
         ? prj.updatedAt
         : new Date(prj.updatedAt)
@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived: !project.isArchived }),
+        body: JSON.stringify({ isArchived: !project.archived }),
       })
       const body = await res.json()
       if (!res.ok || !body.success) {
@@ -102,7 +102,7 @@ const Dashboard: React.FC = () => {
       )
       toast.success(
         `Projet "${project.name}" ${
-          project.isArchived ? 'désarchivé' : 'archivé'
+          project.archived ? 'désarchivé' : 'archivé'
         } avec succès`
       )
     } catch (err: any) {
@@ -136,7 +136,7 @@ const Dashboard: React.FC = () => {
   }
 
   const filteredProjects = projects
-    .filter((p) => showArchived || !p.isArchived)
+    .filter((p) => showArchived || !p.archived)
     .filter(
       (p) =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
