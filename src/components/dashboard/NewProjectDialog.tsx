@@ -44,7 +44,8 @@ const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       storageLimit: '1 GB',
       usagePercentage: 0,
       createdAt: new Date(),
-      lastUpdated: new Date(),
+      updatedAt: new Date(),
+      status: 'ACTIF', // or another default status value as defined in your ProjectStatus type
     }
 
     onCreateProject(newProject)
