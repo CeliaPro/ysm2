@@ -36,28 +36,28 @@ function MultiSelectCombobox({
       <div className="mb-1 text-xs text-muted-foreground">{placeholder}</div>
       <div className="border rounded">
         {options
-          .filter(opt => opt.name.toLowerCase().includes(search.toLowerCase()))
-          .map(opt => (
+          .filter((opt) =>
+            opt.name.toLowerCase().includes(search.toLowerCase())
+          )
+          .map((opt) => (
             <div
               key={opt.id}
               className={`flex items-center px-3 py-1 cursor-pointer`}
               onClick={() =>
                 selected.includes(opt.id)
-                  ? setSelected(selected.filter(id => id !== opt.id))
+                  ? setSelected(selected.filter((id) => id !== opt.id))
                   : setSelected([...selected, opt.id])
               }
             >
               <span>{opt.name}</span>
-              {selected.includes(opt.id) && (
-                <X className="ml-auto w-4 h-4" />
-              )}
+              {selected.includes(opt.id) && <X className="ml-auto w-4 h-4" />}
             </div>
           ))}
       </div>
       <div className="flex flex-wrap mt-2 gap-1">
         {options
-          .filter(opt => selected.includes(opt.id))
-          .map(opt => (
+          .filter((opt) => selected.includes(opt.id))
+          .map((opt) => (
             <span
               key={opt.id}
               className="px-2 py-1 rounded bg-blue-500 text-white text-xs flex items-center gap-1"
@@ -65,7 +65,9 @@ function MultiSelectCombobox({
               {opt.name}
               <X
                 className="w-3 h-3 cursor-pointer"
-                onClick={() => setSelected(selected.filter(id => id !== opt.id))}
+                onClick={() =>
+                  setSelected(selected.filter((id) => id !== opt.id))
+                }
               />
             </span>
           ))}
@@ -74,7 +76,7 @@ function MultiSelectCombobox({
         type="text"
         placeholder="Rechercher…"
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={(e) => setSearch(e.target.value)}
         className="mt-2 w-full border px-2 py-1 rounded text-xs"
       />
     </div>
@@ -106,8 +108,10 @@ function EditUserDialog({
 }) {
   const [fullName, setFullName] = useState(user?.name ?? '')
   const [role, setRole] = useState<UserRole>(user?.role ?? 'employee')
-  const [projectAssignments, setProjectAssignments] = useState<{ projectId: string; role: string }[]>(
-    user?.projectMembers?.map(pm => ({
+  const [projectAssignments, setProjectAssignments] = useState<
+    { projectId: string; role: string }[]
+  >(
+    user?.projectMembers?.map((pm) => ({
       projectId: pm.projectId,
       role: pm.role?.toUpperCase() ?? 'VIEWER',
     })) ?? []
@@ -118,7 +122,7 @@ function EditUserDialog({
       setFullName(user.name ?? '')
       setRole(user.role)
       setProjectAssignments(
-        user.projectMembers?.map(pm => ({
+        user.projectMembers?.map((pm) => ({
           projectId: pm.projectId,
           role: pm.role?.toUpperCase() ?? 'VIEWER',
         })) ?? []
@@ -134,18 +138,20 @@ function EditUserDialog({
   ]
 
   const handleProjectRoleChange = (projectId: string, newRole: string) => {
-    setProjectAssignments(prev =>
-      prev.map(pa =>
+    setProjectAssignments((prev) =>
+      prev.map((pa) =>
         pa.projectId === projectId ? { ...pa, role: newRole } : pa
       )
     )
   }
 
   const handleToggleProject = (projectId: string) => {
-    if (projectAssignments.some(pa => pa.projectId === projectId)) {
-      setProjectAssignments(prev => prev.filter(pa => pa.projectId !== projectId))
+    if (projectAssignments.some((pa) => pa.projectId === projectId)) {
+      setProjectAssignments((prev) =>
+        prev.filter((pa) => pa.projectId !== projectId)
+      )
     } else {
-      setProjectAssignments(prev => [...prev, { projectId, role: 'VIEWER' }])
+      setProjectAssignments((prev) => [...prev, { projectId, role: 'VIEWER' }])
     }
   }
 
@@ -161,11 +167,11 @@ function EditUserDialog({
           <Input
             placeholder="Nom complet"
             value={fullName}
-            onChange={e => setFullName(e.target.value)}
+            onChange={(e) => setFullName(e.target.value)}
           />
           <select
             value={role}
-            onChange={e => setRole(e.target.value as UserRole)}
+            onChange={(e) => setRole(e.target.value as UserRole)}
             className="border rounded-md px-3 py-2 w-full"
           >
             <option value="employee">Employé</option>
@@ -176,8 +182,8 @@ function EditUserDialog({
             <label className="block font-semibold mb-1">
               Affecter à des projets et rôles :
             </label>
-            {projects.map(p => {
-              const pa = projectAssignments.find(a => a.projectId === p.id)
+            {projects.map((p) => {
+              const pa = projectAssignments.find((a) => a.projectId === p.id)
               return (
                 <div key={p.id} className="flex items-center gap-2 mb-1">
                   <input
@@ -189,10 +195,12 @@ function EditUserDialog({
                   {pa && (
                     <select
                       value={pa.role}
-                      onChange={e => handleProjectRoleChange(p.id, e.target.value)}
+                      onChange={(e) =>
+                        handleProjectRoleChange(p.id, e.target.value)
+                      }
                       className="border rounded-md px-2 py-1"
                     >
-                      {projectRoleOptions.map(opt => (
+                      {projectRoleOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -249,13 +257,13 @@ export default function UserManagement() {
 
   useEffect(() => {
     fetch('/api/users', { credentials: 'include' })
-      .then(res => res.json())
+      .then((res) => res.json())
       .then((jsn: User[]) => setUsers(jsn))
   }, [])
 
   useEffect(() => {
     fetch('/api/projects', { credentials: 'include' })
-      .then(res => res.json())
+      .then((res) => res.json())
       .then((data: Project[]) => setProjects(data))
   }, [])
 
@@ -267,7 +275,7 @@ export default function UserManagement() {
 
     const normalizedEmail = email.trim().toLowerCase()
     const exists = users.some(
-      u => u.email.trim().toLowerCase() === normalizedEmail
+      (u) => u.email.trim().toLowerCase() === normalizedEmail
     )
     if (exists) {
       toast.error('Utilisateur existe déjà.')
@@ -284,17 +292,18 @@ export default function UserManagement() {
           name: fullName.trim(),
           email: normalizedEmail,
           role,
+          type: 'INVITE',
           projectIds: selectedProjects,
         }),
       })
 
       if (!response.ok) {
         const { error } = await response.json()
-        throw new Error(error ?? "Erreur lors de l’envoi de l’invitation")
+        throw new Error(error ?? 'Erreur lors de l’envoi de l’invitation')
       }
 
       const newUser: User = await response.json()
-      setUsers(prev => [...prev, newUser])
+      setUsers((prev) => [...prev, newUser])
 
       toast.success('Invitation envoyée avec succès !')
       setFullName('')
@@ -311,7 +320,11 @@ export default function UserManagement() {
   // --- Update user info including per-project assignments ---
   const handleUpdateUser = async (
     userId: string,
-    update: { fullName: string; role: UserRole; projectAssignments: { projectId: string; role: string }[] }
+    update: {
+      fullName: string
+      role: UserRole
+      projectAssignments: { projectId: string; role: string }[]
+    }
   ) => {
     try {
       const res = await fetch(`/api/users/${userId}`, {
@@ -322,7 +335,9 @@ export default function UserManagement() {
       })
       if (!res.ok) throw new Error('Failed to update user')
       const updated = await res.json()
-      setUsers(users => users.map(u => u.id === userId ? { ...u, ...updated } : u))
+      setUsers((users) =>
+        users.map((u) => (u.id === userId ? { ...u, ...updated } : u))
+      )
       toast.success('Utilisateur mis à jour !')
     } catch (err: any) {
       toast.error(err.message || 'Erreur lors de la mise à jour')
@@ -330,7 +345,9 @@ export default function UserManagement() {
   }
 
   const handleResetPassword = async (userId: string) => {
-    toast.info('Fonctionnalité à implémenter : envoi du reset password pour ' + userId)
+    toast.info(
+      'Fonctionnalité à implémenter : envoi du reset password pour ' + userId
+    )
     // await fetch(`/api/users/${userId}/reset-password`, { method: 'POST', credentials: 'include' })
   }
 
@@ -348,7 +365,7 @@ export default function UserManagement() {
         credentials: 'include',
       })
       if (!res.ok) throw new Error('Failed to delete user')
-      setUsers(users.filter(u => u.id !== user.id))
+      setUsers(users.filter((u) => u.id !== user.id))
       toast.success('User deleted successfully!')
     } catch (err: any) {
       toast.error(err.message || 'Error deleting user')
@@ -370,17 +387,17 @@ export default function UserManagement() {
           <Input
             placeholder="Nom complet"
             value={fullName}
-            onChange={e => setFullName(e.target.value)}
+            onChange={(e) => setFullName(e.target.value)}
           />
           <Input
             placeholder="Email"
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
           />
           <select
             value={role}
-            onChange={e => setRole(e.target.value as UserRole)}
+            onChange={(e) => setRole(e.target.value as UserRole)}
             className="border rounded-md px-3 py-2"
           >
             <option value="employee">Employé</option>
@@ -424,19 +441,19 @@ export default function UserManagement() {
 
       {/* Users grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {users.map(u => (
+        {users.map((u) => (
           <Card key={u.id} className="relative">
             {u.status && (
               <span
                 className={`
                   absolute top-3 right-3 px-2 py-1 rounded text-xs font-semibold capitalize
                     ${
-                     u.status === 'active'
-                      ? 'bg-green-100 text-green-700 border-green-400'
-                      : u.status === 'invited'
-                      ? 'bg-yellow-100 text-yellow-700 border-yellow-400'
-                      : 'bg-gray-200 text-gray-500 border-gray-400'
-            }
+                      u.status === 'active'
+                        ? 'bg-green-100 text-green-700 border-green-400'
+                        : u.status === 'invited'
+                          ? 'bg-yellow-100 text-yellow-700 border-yellow-400'
+                          : 'bg-gray-200 text-gray-500 border-gray-400'
+                    }
                 `}
               >
                 {u.status}
@@ -445,7 +462,9 @@ export default function UserManagement() {
             <CardContent className="p-4 space-y-2">
               <h3 className="text-xl font-bold mb-1">{u.name}</h3>
               <p className="text-sm text-muted-foreground">{u.email}</p>
-              <p className="text-xs text-blue-500 uppercase">{roleLabel(u.role)}</p>
+              <p className="text-xs text-blue-500 uppercase">
+                {roleLabel(u.role)}
+              </p>
               <p className="text-xs text-gray-500">
                 Created:{' '}
                 {u.createdAt
@@ -462,11 +481,14 @@ export default function UserManagement() {
                 <div className="mt-2">
                   <p className="text-xs font-bold">Projets assignés :</p>
                   <ul className="text-xs ml-2">
-                    {u.projectMembers.map(pm => (
+                    {u.projectMembers.map((pm) => (
                       <li key={pm.projectId}>
-                        {projects.find(p => p.id === pm.projectId)?.name || pm.projectId}
+                        {projects.find((p) => p.id === pm.projectId)?.name ||
+                          pm.projectId}
                         {' — '}
-                        <span className="font-semibold">{pm.role.toUpperCase()}</span>
+                        <span className="font-semibold">
+                          {pm.role.toUpperCase()}
+                        </span>
                       </li>
                     ))}
                   </ul>

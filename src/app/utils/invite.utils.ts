@@ -1,8 +1,9 @@
 import jwt from 'jsonwebtoken'
-import { Role } from '@prisma/client'
 
 // only these two roles can be embedded in an invite
 export type InviteRole = 'EMPLOYEE' | 'MANAGER'
+
+export type InviteType = 'INVITE' | 'RESET'
 
 const JWT_SECRET = process.env.JWT_INVITE_SECRET as string
 
@@ -10,13 +11,12 @@ export function generateInviteToken(
   email: string,
   name: string,
   role: InviteRole,
+  type: InviteType,
   projects: string[] = []
 ) {
-  return jwt.sign(
-    { name, email, role, projects },
-    JWT_SECRET,
-    { expiresIn: '1d' }
-  )
+  return jwt.sign({ name, email, role, projects, type }, JWT_SECRET, {
+    expiresIn: '1d',
+  })
 }
 
 export function extractInvitePayload(token: string) {
@@ -24,6 +24,7 @@ export function extractInvitePayload(token: string) {
     name: string
     email: string
     role: InviteRole
+    type: InviteType
     projects?: string[]
   }
   // runtime guard (optional but extra-safe)
@@ -34,7 +35,8 @@ export function extractInvitePayload(token: string) {
     name: obj.name,
     email: obj.email,
     role: obj.role,
-    projects: obj.projects ?? []
+    type: obj.type,
+    projects: obj.projects ?? [],
   }
 }
 
@@ -42,19 +44,34 @@ export function generateInviteEmailParams(
   name: string,
   email: string,
   inviteLink: string,
+  inviteType: InviteType,
   projects: string[] = [],
   logoUrl: string
 ) {
   // Generate HTML for the list of projects
   const projectListHtml = projects.length
-    ? `<ul>${projects.map(p => `<li>${p}</li>`).join('')}</ul>`
+    ? `<ul>${projects.map((p) => `<li>${p}</li>`).join('')}</ul>`
     : `<p><em>Aucun projet assigné pour le moment.</em></p>`
+
+  const title =
+    inviteType === 'INVITE'
+      ? 'Invitation à rejoindre YSM'
+      : 'YSM Reset Password'
+  const inviteBody =
+    inviteType === 'INVITE'
+      ? "Vous êtes invité(e) à rejoindre l'équipe YSM en tant que collaborateur(trice)."
+      : 'Veuillez cliquer sur le lien pour réinitialiser votre mot de passe'
+
+  const ctaButtonText =
+    inviteType === 'INVITE'
+      ? 'Rejoindre YSM'
+      : 'réinitialiser votre mot de passe'
 
   return {
     Source: '"YSM Inc." <noreply@nerlana.com>',
     Destination: { ToAddresses: [email] },
     Message: {
-      Subject: { Data: 'Invitation à rejoindre YSM' },
+      Subject: { Data: title },
       Body: {
         Html: {
           Data: `<!DOCTYPE html>
@@ -62,7 +79,7 @@ export function generateInviteEmailParams(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invitation à rejoindre YSM</title>
+  <title>${title}</title>
   <style>
     body { font-family: Helvetica, sans-serif; background-color: #fff; margin: 0; padding: 0; }
     .container { max-width: 680px; margin: 0 auto; padding: 20px; }
@@ -82,23 +99,19 @@ export function generateInviteEmailParams(
     <hr />
     <h1>Bonjour ${name},</h1>
     <p>
-      Vous êtes invité(e) à rejoindre l'équipe YSM en tant que collaborateur(trice).
+      ${inviteBody}
     </p>
-    <div class="projects-label">Projets assignés :</div>
-    ${projectListHtml}
-    <p>
-      Pour accepter cette invitation et créer votre compte, cliquez sur le bouton ci-dessous.
-    </p>
-    <a class="button" href="${inviteLink}" target="_blank">Rejoindre YSM</a>
+    ${inviteType === 'INVITE' ? `<div class="projects-label">Projets assignés :</div> ${projectListHtml} <p> Pour accepter cette invitation et créer votre compte, cliquez sur le bouton ci-dessous. </p>` : ''}
+    <a class="button" href="${inviteLink}" target="_blank">${ctaButtonText}</a>
     <p class="footer">
       Si vous n’êtes pas à l’origine de cette demande, vous pouvez ignorer ce message.
     </p>
   </div>
 </body>
 </html>
-`
-        }
-      }
-    }
+`,
+        },
+      },
+    },
   }
 }
