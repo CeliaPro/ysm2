@@ -14,6 +14,7 @@ interface ProjectListProps {
   onEditProject: (project: Project) => void
   onArchiveProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
+  onViewProject?: (project: Project) => void
 }
 
 const ProjectList: React.FC<ProjectListProps> = ({
@@ -25,6 +26,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
   onEditProject,
   onArchiveProject,
   onDeleteProject,
+  onViewProject,
 }) => {
   if (projects.length === 0) {
     return (
@@ -36,8 +38,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
             {searchQuery
               ? `Aucun projet ne correspond à "${searchQuery}"`
               : showArchived
-                ? 'Aucun projet archivé trouvé'
-                : 'Commencez par créer votre premier projet'}
+              ? 'Aucun projet archivé trouvé'
+              : 'Commencez par créer votre premier projet'}
           </p>
           {canManageProjects && !searchQuery && (
             <Button onClick={onNewProject}>
@@ -60,6 +62,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
           onEditProject={onEditProject}
           onArchiveProject={onArchiveProject}
           onDeleteProject={onDeleteProject}
+          onViewProject={onViewProject}
         />
       ))}
     </div>

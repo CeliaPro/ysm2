@@ -27,6 +27,7 @@ import {
   Settings,
   LogOut,
   Menu,
+  TrendingUp,
 } from 'lucide-react'
 
 export interface NavbarProps {
@@ -51,38 +52,45 @@ const Navbar: React.FC<NavbarProps> = ({
     useState<boolean>(false)
 
   // Define your nav items
-  const navItems: {
-    name: string
-    path: string
-    icon: ReactNode
-    showAlways?: boolean
-    showIf?: boolean
-  }[] = [
-    {
-      name: 'Dashboard',
-      path: '/dashboard',
-      icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-      showAlways: true,
-    },
-    {
-      name: 'Documents',
-      path: '/documents',
-      icon: <FileText className="h-4 w-4 mr-2" />,
-      showAlways: true,
-    },
-    {
-      name: 'AI Assistant',
-      path: '/ai',
-      icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-      showAlways: true,
-    },
-    {
-      name: 'Settings',
-      path: '/users',
-      icon: <FolderClosed className="h-4 w-4 mr-2" />,
-      showIf: isAdmin(),
-    },
-  ]
+const navItems: {
+  name: string
+  path: string
+  icon: ReactNode
+  showAlways?: boolean
+  showIf?: boolean
+}[] = [
+  {
+    name: 'Dashboard',
+    path: '/dashboard',
+    icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+    showAlways: true,
+  },
+  {
+    name: 'Analyses',
+    path: '/dashboard/analytics',
+    icon: <TrendingUp className="h-4 w-4 mr-2" />,
+    showAlways: true,
+  },
+  {
+    name: 'Documents',
+    path: '/documents',
+    icon: <FileText className="h-4 w-4 mr-2" />,
+    showAlways: true,
+  },
+  {
+    name: 'AI Assistant',
+    path: '/ai',
+    icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+    showAlways: true,
+  },
+  {
+    name: 'Collaborateurs',
+    path: '/users',
+    icon: <FolderClosed className="h-4 w-4 mr-2" />,
+    showIf: isAdmin(),
+  },
+]
+
   const filteredNavItems = navItems.filter(
     (item) => item.showAlways || item.showIf
   )

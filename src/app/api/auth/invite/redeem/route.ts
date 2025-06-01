@@ -7,7 +7,7 @@ import { storeJwtInCookie } from '@/app/utils/auth.utils'
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, password } = await req.json()
+    const { token, password, name: nameFromForm } = await req.json()
 
     // 1) decode token
     let payload: { email: string; name: string; role: InviteRole }
@@ -17,27 +17,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid or expired invite token' }, { status: 400 })
     }
 
-    // 2) enforce unique email at runtime
-    const existing = await prisma.user.findUnique({ where: { email: payload.email } })
-    if (existing) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
+    // 2) Find the invited user
+    const user = await prisma.user.findUnique({ where: { email: payload.email } })
+    if (!user) {
+      return NextResponse.json({ error: 'No invite found for this email.' }, { status: 404 })
+    }
+    if (user.status === 'ACTIVE') {
+      return NextResponse.json({ error: 'User already activated.' }, { status: 409 })
     }
 
-    // 3) create with dynamic role
-    const user = await prisma.user.create({
+    // 3) Update password, set status to ACTIVE, update lastLogin, set name
+    const updated = await prisma.user.update({
+      where: { email: payload.email },
       data: {
-        name: payload.name,
-        email: payload.email,
         password: await hash(password, 10),
-        role: payload.role,      // ← EMPLOYEE or MANAGER
+        status: 'ACTIVE',
+        lastLogin: new Date(),
+        name: nameFromForm || payload.name || user.name, // <-- add this line
+        // Do NOT change role here; it stays as set during invite!
       },
     })
 
     // 4) set auth cookie & return
     return storeJwtInCookie({
-      id: user.id,
-      email: user.email,
-      role: user.role,
+      id: updated.id,
+      email: updated.email,
+      role: updated.role,
     })
 
   } catch (error: any) {

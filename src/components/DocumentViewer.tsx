@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/aiUi/badge'
 import { format } from 'date-fns'
-import { Document } from '@/types/project'
+import { Document, AccessLevel } from '@/types/project'
 
 interface DocumentViewerProps {
   document: Document | null
@@ -31,6 +31,12 @@ interface DocumentViewerProps {
   onEdit: (document: Document) => void
   onArchive: (document: Document) => void
   onDelete: (document: Document) => void
+}
+
+const accessLevelTranslations: Record<AccessLevel, string> = {
+  public: 'Public',
+  private: 'Privé',
+  project: 'Projet',
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({
@@ -48,12 +54,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     return null
   }
 
-  // Translation map for access levels
-  const accessLevelTranslations = {
-    public: 'Public',
-    private: 'Privé',
-    project: 'Projet',
-  }
+  // This is the correct accessLevel key (not the translation)
+  const accessLevel = document.accessLevel as AccessLevel | undefined
 
   const getStorageIcon = () => {
     return document.storageProvider === 's3' ? (
@@ -64,28 +66,26 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   }
 
   const getAccessLevelIcon = () => {
-    switch (document.accessLevel) {
-      case 'public':
-        return <GlobeIcon className="h-4 w-4 mr-1 text-green-500" />
-      case 'private':
-        return <LockIcon className="h-4 w-4 mr-1 text-red-500" />
-      case 'project':
-        return <LockIcon className="h-4 w-4 mr-1 text-yellow-500" />
-      default:
-        return null
+    if (!accessLevel) return null
+    if (accessLevel === 'public') {
+      return <GlobeIcon className="h-4 w-4 mr-1 text-green-500" />
     }
+    if (accessLevel === 'private') {
+      return <LockIcon className="h-4 w-4 mr-1 text-red-500" />
+    }
+    if (accessLevel === 'project') {
+      return <LockIcon className="h-4 w-4 mr-1 text-yellow-500" />
+    }
+    return null
   }
 
   const handleDocumentDownload = () => {
-    console.log('Downloading document:', document)
     fetch('/api/files/download', {
       method: 'POST',
       credentials: 'include',
-      body: JSON.stringify({key: document.publicUrl})
-    }
-
-    ).then((res)=> res.json()).then((data) => {
-      if(data.success){
+      body: JSON.stringify({ key: document.publicUrl })
+    }).then((res) => res.json()).then((data) => {
+      if (data.success) {
         ref.current?.setAttribute('href', data.presignedUrl)
         ref.current?.click()
       }
@@ -102,27 +102,23 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             {document.projectName}
           </DialogDescription>
         </DialogHeader>
-        // href with ref to open the file in a new tab in one line
         <a
-        ref={ref}
+          ref={ref}
           href={s3Link}
           target="_blank"
           rel="noopener noreferrer"
         />
-        
-
         <div className="flex flex-col gap-4 py-4">
           <div className="flex items-center gap-2">
             <FileIcon className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium">{document.name}</p>
               <p className="text-xs text-muted-foreground">
-                {document.fileType.toUpperCase()} -{' '}
-                {document.fileSizeFormatted || document.fileSize.toString()}
+                {document.fileType?.toUpperCase() ?? ''} -{' '}
+                {document.fileSizeFormatted || document.fileSize?.toString()}
               </p>
             </div>
           </div>
-
           <div className="flex items-center justify-between border-t border-b py-2">
             <div className="flex items-center gap-4">
               <div className="flex items-center">
@@ -136,17 +132,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                   </Badge>
                 )}
               </div>
-
               <div className="flex items-center">
                 {getAccessLevelIcon()}
                 <span className="text-sm">
-                  {accessLevelTranslations[
-                    document.accessLevel as keyof typeof accessLevelTranslations
-                  ] || document.accessLevel}
+                  {/* Use translations here */}
+                  {accessLevel ? accessLevelTranslations[accessLevel] : document.accessLevel}
                 </span>
               </div>
             </div>
-
             <div>
               {document.isArchived && (
                 <Badge
@@ -158,7 +151,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               )}
             </div>
           </div>
-
           {document.description && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Description</p>
@@ -167,7 +159,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               </p>
             </div>
           )}
-
           {document.tags && document.tags.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Tags</p>
@@ -180,7 +171,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               </div>
             </div>
           )}
-
           {document.storageProvider === 's3' && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Détails du Stockage Cloud</p>
@@ -199,7 +189,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             </div>
           )}
         </div>
-
         <DialogFooter className="sm:justify-between">
           <div className="hidden sm:block">
             <Button variant="ghost" size="sm" onClick={onClose}>

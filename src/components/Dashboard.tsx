@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/aiUi/badge'
@@ -9,79 +10,80 @@ import ProjectList from '@/components/dashboard/ProjectList'
 import NewProjectDialog from '@/components/dashboard/NewProjectDialog'
 import EditProjectDialog from '@/components/dashboard/EditProjectDialog'
 import { Project } from '@/types/project'
-import { mockProjects } from '@/data/mockProjects'
 import { toast } from 'sonner'
 
 const Dashboard: React.FC = () => {
   const { isAdmin, isProjectManager } = useAuth()
   const canManageProjects = isAdmin() || isProjectManager()
+  const router = useRouter()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [showArchived, setShowArchived] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Dialog states
+  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
+  const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
+
+  // Convert API project to required Project type (all counts required)
+  const toProject = (prj: any): Project => ({
+    id: prj.id,
+    name: prj.name,
+    description: prj.description,
+    documentsCount: prj.documentsCount,
+    membersCount: prj.membersCount,
+    storageUsed: prj.storageUsed ?? '',
+    storageLimit: prj.storageLimit ?? '',
+    usagePercentage: prj.usagePercentage ?? 0,
+    status: prj.status ?? 'active', // <--- status added here
+    isArchived: prj.isArchived ?? prj.archived ?? false,
+    createdAt: prj.createdAt instanceof Date ? prj.createdAt : new Date(prj.createdAt),
+    lastUpdated: prj.updatedAt
+      ? prj.updatedAt instanceof Date
+        ? prj.updatedAt
+        : new Date(prj.updatedAt)
+      : prj.lastUpdated instanceof Date
+        ? prj.lastUpdated
+        : new Date(prj.lastUpdated),
+  })
+
   const fetchProjects = async () => {
-  setLoading(true)
-  try {
-    const res = await fetch('/api/projects', { credentials: 'include' })
-    const json = await res.json()
-
-    const apiProjects: Project[] = json.map((prj: any) => ({
-      id: prj.id,
-      name: prj.name,
-      description: prj.description,
-      documentsCount: prj.documentsCount ?? 0,
-      membersCount: prj.membersCount ?? 0,
-      storageUsed: prj.storageUsed ?? '',
-      storageLimit: prj.storageLimit ?? '',
-      usagePercentage: prj.usagePercentage ?? 0,
-      isArchived: prj.isArchived ?? false,
-
-      // ✏️ Use prj.createdAt and prj.updatedAt here:
-      createdAt: new Date(prj.createdAt),
-      lastUpdated: new Date(prj.updatedAt),
-    }))
-
-    setProjects(apiProjects)
-  } catch (err) {
-    console.error(err)
-    toast.error('Échec du chargement des projets')
-  } finally {
-    setLoading(false)
+    setLoading(true)
+    try {
+      const res = await fetch('/api/projects', { credentials: 'include' })
+      const json = await res.json()
+      setProjects(json.map(toProject))
+    } catch (err) {
+      console.error(err)
+      toast.error('Échec du chargement des projets')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   useEffect(() => {
     fetchProjects()
   }, [])
 
-  const onCreateProject = (project: Project) => {
-    fetch('/api/projects', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: project.name,
-        description: project.description,
-      }),
-    }).then(() => fetchProjects())
+  const onCreateProject = async (project: Project) => {
+    try {
+      await fetch('/api/projects', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: project.name,
+          description: project.description,
+        }),
+      })
+      fetchProjects()
+    } catch {
+      toast.error('Erreur lors de la création du projet')
+    }
   }
 
-  // NEW / EDIT dialog state (unchanged)
-  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
-  const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false)
-  const [editingProject, setEditingProject] = useState<Project | null>(null)
-
-  const filteredProjects = projects
-    .filter((p) => showArchived || !p.isArchived)
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-
-  // ARCHIVE / UNARCHIVE via API
   const handleArchiveProject = async (project: Project) => {
     try {
       const res = await fetch(`/api/projects?id=${project.id}`, {
@@ -94,9 +96,9 @@ const Dashboard: React.FC = () => {
       if (!res.ok || !body.success) {
         throw new Error(body.message || 'Échec de l’archivage')
       }
-      // merge updated project back into state
+      const updated = toProject(body.data)
       setProjects((prev) =>
-        prev.map((p) => (p.id === project.id ? body.data : p))
+        prev.map((p) => (p.id === project.id ? updated : p))
       )
       toast.success(
         `Projet "${project.name}" ${
@@ -109,7 +111,6 @@ const Dashboard: React.FC = () => {
     }
   }
 
-  // DELETE via API
   const handleDeleteProject = async (project: Project) => {
     if (!confirm(`Supprimer "${project.name}" ?`)) return
     try {
@@ -132,6 +133,19 @@ const Dashboard: React.FC = () => {
   const openEditProjectDialog = (project: Project) => {
     setEditingProject(project)
     setIsEditProjectDialogOpen(true)
+  }
+
+  const filteredProjects = projects
+    .filter((p) => showArchived || !p.isArchived)
+    .filter(
+      (p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+
+  // Add this: Handler for view button
+  const handleViewProject = (project: Project) => {
+    router.push(`/projects/${project.id}`)
   }
 
   if (loading) return <p>Loading...</p>
@@ -190,6 +204,7 @@ const Dashboard: React.FC = () => {
         onEditProject={openEditProjectDialog}
         onArchiveProject={handleArchiveProject}
         onDeleteProject={handleDeleteProject}
+        onViewProject={handleViewProject} // <---- Pass handler here!
       />
 
       {/* New / Edit Dialogs */}
@@ -204,7 +219,7 @@ const Dashboard: React.FC = () => {
         project={editingProject}
         onSaveChanges={(updated) => {
           setProjects((prev) =>
-            prev.map((p) => (p.id === updated.id ? updated : p))
+            prev.map((p) => (p.id === updated.id ? toProject(updated) : p))
           )
           setIsEditProjectDialogOpen(false)
         }}

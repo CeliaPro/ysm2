@@ -27,47 +27,101 @@ enum ChatRole {
   SYSTEM
 }
 
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+// ADD THIS:
+enum ProjectStatus {
+  ACTIF
+  EN_ATTENTE
+  TERMINE
+}
+
+enum TaskStatus {
+  A_FAIRE      // Represents "À faire"
+  EN_COURS     // Represents "En cours"
+  TERMINEE     // Represents "Terminée"
+}
+
+enum TaskSeverity {
+  FAIBLE
+  MOYENNE
+  HAUTE
+  CRITIQUE
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String     @id @default(cuid())
+  email     String     @unique
   password  String
   name      String?
-  role      Role     @default(EMPLOYEE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  role      Role       @default(EMPLOYEE)
+  status    UserStatus @default(INVITED)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  lastLogin DateTime?
   isDeleted Boolean?
   user_role String?
 
+  // Relations
+  documents     Document[]      @relation("Uploader")
+  updatedDocs   Document[]      @relation("Updater")
   projects      ProjectMember[]
-  documents     Document[]
   invites       Invite[]        @relation("Inviter")
   conversations Conversation[]
   messages      Message[]
 }
 
 model Project {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  archived Boolean @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  archived    Boolean        @default(false)
+  status      ProjectStatus  @default(ACTIF)
+  startDate   DateTime?      // <-- Add this line
+  endDate     DateTime?      // <-- Add this line
 
   members       ProjectMember[]
   documents     Document[]
   storagePolicy StoragePolicy?
+  tasks         Task[]
 }
+
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  assignee    String
+  severity    TaskSeverity @default(MOYENNE)
+  status      TaskStatus   @default(A_FAIRE)
+  startDate   DateTime
+  deadline    DateTime
+  endDate     DateTime?
+  createdAt   DateTime     @default(now())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id])
+
+  // Gantt dependencies: Self-relation
+  dependencies   Task[]    @relation("TaskDependencies")
+  dependedBy     Task[]    @relation("TaskDependencies")
+}
+
+
 
 model ProjectMember {
   id        String      @id @default(cuid())
   userId    String
   projectId String
   role      ProjectRole
-  createdAt DateTime     @default(now())
+  createdAt DateTime    @default(now())
 
-  user    User    @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
   project Project @relation(fields: [projectId], references: [id])
 
   @@unique([userId, projectId])
@@ -85,14 +139,17 @@ model Document {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  userId    String
-  projectId String
-  storageId String?
+  userId      String
+  updatedById String?
+  projectId   String
+  storageId   String?
 
-  user    User     @relation(fields: [userId], references: [id])
-  project Project  @relation(fields: [projectId], references: [id])
-  storage Storage? @relation(fields: [storageId], references: [id])
-  tags    Tag[]    @relation("DocumentTags")
+  // --- RELATIONS
+  uploadedBy User     @relation("Uploader", fields: [userId], references: [id], onDelete: Cascade)
+  updatedBy  User?    @relation("Updater", fields: [updatedById], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id])
+  storage    Storage? @relation(fields: [storageId], references: [id])
+  tags       Tag[]    @relation("DocumentTags")
 }
 
 model Tag {
@@ -138,7 +195,7 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id])
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[] // Messages will be cascade‐deleted
 }
 
@@ -156,6 +213,6 @@ model Message {
   userId         String?
   conversationId String
 
-  user         User?        @relation(fields: [userId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }

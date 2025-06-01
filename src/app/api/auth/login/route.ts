@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // 👇 ADD THIS: update lastLogin
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    })
+
     // Set the cookie
     const response = storeJwtInCookie({
       id: user.id,

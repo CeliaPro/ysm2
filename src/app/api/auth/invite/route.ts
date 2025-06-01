@@ -1,4 +1,3 @@
-// app/api/invite/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import {
   generateInviteEmailParams,
@@ -7,6 +6,7 @@ import {
 } from '@/app/utils/invite.utils'
 import { withAuthentication } from '@/app/utils/auth.utils'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
+import { prisma } from '@/lib/prisma'
 
 const client = new SESClient({
   region: 'eu-central-1',
@@ -18,35 +18,92 @@ const client = new SESClient({
 
 export const POST = withAuthentication(
   async (req: NextRequest, user) => {
-    // 1) read role from body
-    const { email, name, role } = await req.json() as {
-      email: string
-      name: string
-      role: InviteRole
-    }
+    try {
+      // 1) Read from body
+      const { email, name, role, projectIds } = await req.json() as {
+        email: string
+        name: string
+        role: InviteRole
+        projectIds?: string[]
+      }
 
-    // 2) validate it’s one of the two allowed roles
-    if (role !== 'EMPLOYEE' && role !== 'MANAGER') {
+      // 2) Validate role
+      if (role !== 'EMPLOYEE' && role !== 'MANAGER') {
+        return NextResponse.json(
+          { error: 'Invalid role – must be EMPLOYEE or MANAGER' },
+          { status: 400 }
+        )
+      }
+
+      // 3) Check if user already exists (by email)
+      const existing = await prisma.user.findUnique({ where: { email } })
+      if (existing) {
+        return NextResponse.json(
+          { error: 'User with this email already exists' },
+          { status: 409 }
+        )
+      }
+
+      // 4) Generate token
+      const token = generateInviteToken(email, name, role)
+
+      // 5) Build invite link
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const inviteLink = `${baseUrl}/setpassword?token=${token}`
+
+      // 6) Fetch project names for the invite email
+      let projectNamesArray: string[] = []
+      if (projectIds && projectIds.length > 0) {
+        const projects = await prisma.project.findMany({
+          where: { id: { in: projectIds } },
+          select: { name: true }
+        })
+        projectNamesArray = projects.map(p => p.name)
+      }
+
+      // 7) Compose logo url
+      const logoUrl = `${baseUrl}/lovable-uploads/vinci%20energies%20logo.png`
+
+      // 8) Send email
+      const params = generateInviteEmailParams(name, email, inviteLink, projectNamesArray, logoUrl)
+      await client.send(new SendEmailCommand(params))
+
+      // 9) Create user as "invited", assign projects via projects join table
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          name,
+          role,
+          status: 'INVITED',
+          password: '', // Placeholder password for invited users
+          ...(projectIds && projectIds.length
+            ? {
+                projects: {
+                  create: projectIds.map((projectId) => ({
+                    project: { connect: { id: projectId } },
+                    role: role as any, // Cast to ProjectRole or use the correct enum/type
+                  })),
+                },
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      })
+
+      return NextResponse.json(newUser)
+    } catch (err: any) {
+      console.error('[INVITE_POST_ERROR]', err)
       return NextResponse.json(
-        { error: 'Invalid role – must be EMPLOYEE or MANAGER' },
-        { status: 400 }
+        { error: err.message || 'Unknown error occurred' },
+        { status: 500 }
       )
     }
-
-    // 3) generate a token that now embeds that role
-    const token = generateInviteToken(email, name, role)
-
-    // 4) build your invite link (use an env var instead of hard-coded localhost)
-    const inviteLink = `${
-      process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    }/setpassword?token=${token}`
-
-    // 5) send the SES email
-    const params = generateInviteEmailParams(name, email, inviteLink)
-    await client.send(new SendEmailCommand(params))
-
-    // 6) signal success
-    return NextResponse.json({ success: true })
   },
-  'ADMIN'  // only admins can hit this endpoint
+  'ADMIN'
 )

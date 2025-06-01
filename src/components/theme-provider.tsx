@@ -29,31 +29,58 @@ export function ThemeProvider({
   storageKey = 'ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+  const [theme, setThemeState] = useState<Theme>(defaultTheme)
 
+  // Set theme from localStorage on mount (avoid SSR mismatch)
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(storageKey) as Theme | null
+    if (savedTheme && savedTheme !== theme) {
+      setThemeState(savedTheme)
+    }
+    // eslint-disable-next-line
+  }, [])
+
+  // Listen for system theme changes if theme == 'system'
   useEffect(() => {
     const root = window.document.documentElement
-    root.classList.remove('light', 'dark')
-
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-        .matches
-        ? 'dark'
-        : 'light'
-      root.classList.add(systemTheme)
-      return
+    const apply = (t: Theme) => {
+      root.classList.remove('light', 'dark')
+      if (t === 'system') {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+        root.classList.add(systemTheme)
+      } else {
+        root.classList.add(t)
+      }
     }
 
-    root.classList.add(theme)
+    apply(theme)
+
+    let media: MediaQueryList
+    const onSystemThemeChange = (e: MediaQueryListEvent) => {
+      if (theme === 'system') apply('system')
+    }
+
+    if (theme === 'system') {
+      media = window.matchMedia('(prefers-color-scheme: dark)')
+      media.addEventListener('change', onSystemThemeChange)
+    }
+
+    return () => {
+      if (media) media.removeEventListener('change', onSystemThemeChange)
+    }
+  }, [theme])
+
+  // Always update localStorage when theme changes (for cross-tab sync)
+  useEffect(() => {
+    localStorage.setItem(storageKey, theme)
   }, [theme])
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
-      setTheme(theme)
+    setTheme: (t: Theme) => {
+      setThemeState(t)
     },
   }
 
@@ -66,9 +93,7 @@ export function ThemeProvider({
 
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext)
-
   if (context === undefined)
     throw new Error('useTheme must be used within a ThemeProvider')
-
   return context
 }

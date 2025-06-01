@@ -23,6 +23,8 @@ export const GET = withAuthentication(async (req, user) => {
         role: true,
         createdAt: true,
         updatedAt: true,
+        status: true,
+        lastLogin: true,
       },
     })
   }

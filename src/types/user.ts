@@ -6,10 +6,10 @@ export type UserRole = 'admin' | 'project_manager' | 'employee';
 export interface User {
   id: string;
   email: string;
-  fullName: string;
+  name: string;
   role: UserRole;
   createdAt: Date;
-  lastLogin?: Date;
+  lastLogin: Date;
   projectMembers?: ProjectMember[];
   status?: 'active' | 'invited' | 'inactive';
 }

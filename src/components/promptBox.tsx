@@ -82,7 +82,6 @@ const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
         // call your JSON‐based endpoint
         const res = await fetch('/api/chat/upload', {
           method: 'POST',
-          credentials: 'include',           // ← ensures auth cookie is sent
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             conversationId: convId,

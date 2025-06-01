@@ -15,8 +15,6 @@ import {
   TrashIcon,
   StarIcon,
   EyeIcon,
-  LockIcon,
-  GlobeIcon,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { Document } from '@/types/project'
@@ -56,33 +54,21 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
     }
   }
 
-  const getAccessLevelIcon = () => {
-    switch (document.accessLevel) {
-      case 'public':
-        return <GlobeIcon className="h-4 w-4 mr-1 text-green-500" />
-      case 'private':
-        return <LockIcon className="h-4 w-4 mr-1 text-red-500" />
-      case 'project':
-        return <LockIcon className="h-4 w-4 mr-1 text-yellow-500" />
-      default:
-        return null
-    }
-  }
-
-  // Translation map for access levels
-  const accessLevelTranslations = {
-    public: 'Public',
-    private: 'Privé',
-    project: 'Projet',
-  }
-
-  // Safely format file size for display, handle undefined or null values
   const fileSizeFormatted =
     document.fileSizeFormatted ||
     (typeof document.fileSize === 'number' ? document.fileSize.toString() : '0')
 
   return (
-    <Card className="bg-card text-card-foreground shadow-sm">
+    <Card className="bg-card text-card-foreground shadow-sm relative">
+      {/* Star and Archive badges */}
+      <div className="absolute top-2 right-2 flex gap-1 z-10">
+        {document.isStarred && (
+          <Badge variant="secondary" className="bg-yellow-200 text-yellow-800">★</Badge>
+        )}
+        {document.isArchived && (
+          <Badge variant="outline" className="bg-slate-200 text-slate-700">Archived</Badge>
+        )}
+      </div>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium tracking-tight">
           {document.name}
@@ -92,9 +78,11 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
             variant="ghost"
             size="icon"
             onClick={() => onToggleStar(document)}
+            title={document.isStarred ? "Unstar" : "Star"}
           >
             <StarIcon
               className={`h-4 w-4 ${document.isStarred ? 'text-yellow-500' : 'text-muted-foreground'}`}
+              fill={document.isStarred ? "#FFD600" : "none"}
             />
           </Button>
         </div>
@@ -103,7 +91,9 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
       <CardContent className="grid gap-4 py-2 text-sm">
         <div className="flex items-center">
           {fileTypeIcon()}
-          <span>Fichier {document.fileType.toUpperCase()}</span>
+          <span>
+            Fichier {document.fileType?.toUpperCase() ?? ''}
+          </span>
         </div>
         <div className="flex items-center">
           <span className="text-muted-foreground">Taille:</span>
@@ -114,28 +104,8 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
           <span className="ml-1">{document.projectName || 'Inconnu'}</span>
         </div>
         <div className="flex items-center">
-          <span className="text-muted-foreground">Stockage:</span>
-          <div className="flex items-center ml-1">
-            <Badge variant="outline" className="text-xs">
-              {document.storageProvider.toUpperCase()}
-            </Badge>
-            {document.storageProvider === 's3' && document.s3Region && (
-              <Badge variant="outline" className="text-xs ml-1">
-                {document.s3Region}
-              </Badge>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center">
-          <span className="text-muted-foreground">Accès:</span>
-          <div className="flex items-center ml-1">
-            {getAccessLevelIcon()}
-            <span>
-              {accessLevelTranslations[
-                document.accessLevel as keyof typeof accessLevelTranslations
-              ] || document.accessLevel}
-            </span>
-          </div>
+          <span className="text-muted-foreground">Par:</span>
+          <span className="ml-1 font-semibold">{document.uploadedBy || '-'}</span>
         </div>
         {document.description && (
           <div>
@@ -164,13 +134,17 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
 
       <CardFooter className="flex justify-between items-center py-2">
         <span className="text-xs text-muted-foreground">
-          Importé le {format(document.uploadedAt, 'dd MMM yyyy')}
+          Importé le{' '}
+          {document.uploadedAt && !isNaN(new Date(document.uploadedAt as any).getTime())
+            ? format(new Date(document.uploadedAt as any), 'dd MMM yyyy')
+            : 'Unknown'}
         </span>
         <div className="space-x-1">
           <Button
             variant="outline"
             size="icon"
             onClick={() => onView(document)}
+            title="View"
           >
             <EyeIcon className="h-4 w-4" />
           </Button>
@@ -178,6 +152,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
             variant="outline"
             size="icon"
             onClick={() => onEdit(document)}
+            title="Edit"
           >
             <EditIcon className="h-4 w-4" />
           </Button>
@@ -186,6 +161,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
             size="icon"
             onClick={() => onArchive(document)}
             className={document.isArchived ? 'text-green-500' : 'text-red-500'}
+            title={document.isArchived ? "Unarchive" : "Archive"}
           >
             <ArchiveIcon className="h-4 w-4" />
           </Button>
@@ -193,6 +169,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
             variant="destructive"
             size="icon"
             onClick={() => onDelete(document)}
+            title="Delete"
           >
             <TrashIcon className="h-4 w-4" />
           </Button>
