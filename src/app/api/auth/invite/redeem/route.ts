@@ -2,7 +2,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcrypt'
-import { extractInvitePayload, InviteRole } from '@/app/utils/invite.utils'
+import {
+  extractInvitePayload,
+  InviteRole,
+  InviteType,
+} from '@/app/utils/invite.utils'
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
 
 export async function POST(req: NextRequest) {
@@ -10,20 +14,36 @@ export async function POST(req: NextRequest) {
     const { token, password, name: nameFromForm } = await req.json()
 
     // 1) decode token
-    let payload: { email: string; name: string; role: InviteRole }
+    let payload: {
+      email: string
+      name: string
+      role: InviteRole
+      type: InviteType
+    }
     try {
       payload = extractInvitePayload(token)
     } catch (err: any) {
-      return NextResponse.json({ error: 'Invalid or expired invite token' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Invalid or expired invite token' },
+        { status: 400 }
+      )
     }
 
     // 2) Find the invited user
-    const user = await prisma.user.findUnique({ where: { email: payload.email } })
+    const user = await prisma.user.findUnique({
+      where: { email: payload.email },
+    })
     if (!user) {
-      return NextResponse.json({ error: 'No invite found for this email.' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No invite found for this email.' },
+        { status: 404 }
+      )
     }
-    if (user.status === 'ACTIVE') {
-      return NextResponse.json({ error: 'User already activated.' }, { status: 409 })
+    if (payload.type === 'INVITE' && user.status === 'ACTIVE') {
+      return NextResponse.json(
+        { error: 'User already activated.' },
+        { status: 409 }
+      )
     }
 
     // 3) Update password, set status to ACTIVE, update lastLogin, set name
@@ -44,9 +64,11 @@ export async function POST(req: NextRequest) {
       email: updated.email,
       role: updated.role,
     })
-
   } catch (error: any) {
     console.error('Redeem error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
