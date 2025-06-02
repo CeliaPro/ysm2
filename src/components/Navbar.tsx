@@ -82,18 +82,22 @@ const Navbar: React.FC<NavbarProps> = ({
     showAlways?: boolean
     showIf?: boolean
   }[] = [
-    {
+
+
+     {
       name: 'Dashboard',
-      path: '/dashboard',
+      path: '/dashboard/analytics',
       icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
       showAlways: true,
     },
-    {
-      name: 'Analyses',
-      path: '/dashboard/analytics',
+
+   {
+      name: 'Projects',
+      path: '/dashboard',
       icon: <TrendingUp className="h-4 w-4 mr-2" />,
       showAlways: true,
     },
+ 
     {
       name: 'Documents',
       path: '/documents',

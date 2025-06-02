@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       where: { email: payload.email },
       data: {
         password: await hash(password, 10),
-        status: 'ACTIVE',
+        status: 'ACTIVE',           // <<---- force uppercase!
         lastLogin: new Date(),
         name: nameFromForm || payload.name || user.name,
       },

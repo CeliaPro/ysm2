@@ -18,6 +18,20 @@ import {
 import { User, UserRole } from '@/types/user'
 import { Project, ProjectMember } from '@/types/project'
 
+// --- Role mapping function ---
+function mapRoleToBackend(role: UserRole): string {
+  switch (role) {
+    case 'employee':
+      return 'EMPLOYEE'
+    case 'project_manager':
+      return 'MANAGER'
+    case 'admin':
+      return 'ADMIN'
+    default:
+      return 'EMPLOYEE'
+  }
+}
+
 // --- MultiSelectCombobox (NO selection background highlight) ---
 function MultiSelectCombobox({
   options,
@@ -284,6 +298,9 @@ export default function UserManagement() {
 
     setLoading(true)
     try {
+      // Use mapped role
+      const backendRole = mapRoleToBackend(role)
+
       const response = await fetch('/api/auth/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -291,7 +308,7 @@ export default function UserManagement() {
         body: JSON.stringify({
           name: fullName.trim(),
           email: normalizedEmail,
-          role,
+          role: backendRole,
           type: 'INVITE',
           projectIds: selectedProjects,
         }),
@@ -344,35 +361,35 @@ export default function UserManagement() {
     }
   }
 
-const handleResetPassword = async (userId: string) => {
-  const user = users.find((u) => u.id === userId)
-  if (!user) {
-    toast.error('Utilisateur introuvable.')
-    return
-  }
-  try {
-    const response = await fetch('/api/auth/invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        type: 'RESET', // Tell the backend this is a reset password request
-      }),
-    })
-
-    if (response.ok) {
-      toast.success('Reset password email sent!')
-    } else {
-      const { error } = await response.json()
-      toast.error(error || 'Could not send reset password email.')
+  // --- Fix: Use backend role mapping here as well for reset password ---
+  const handleResetPassword = async (userId: string) => {
+    const user = users.find((u) => u.id === userId)
+    if (!user) {
+      toast.error('Utilisateur introuvable.')
+      return
     }
-  } catch (error) {
-    toast.error('Network error.')
-  }
-}
+    try {
+      const response = await fetch('/api/auth/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          name: user.name,
+          role: mapRoleToBackend(user.role),
+          type: 'RESET', // Tell the backend this is a reset password request
+        }),
+      })
 
+      if (response.ok) {
+        toast.success('Reset password email sent!')
+      } else {
+        const { error } = await response.json()
+        toast.error(error || 'Could not send reset password email.')
+      }
+    } catch (error) {
+      toast.error('Network error.')
+    }
+  }
 
   const handleEditUser = (user: User) => {
     setEditUser(user)
@@ -395,11 +412,13 @@ const handleResetPassword = async (userId: string) => {
     }
   }
 
-  const roleLabel = (role: UserRole) => {
-    if (role === 'admin') return 'Admin'
-    if (role === 'project_manager') return 'Project Manager'
-    return 'Employee'
+  const roleLabel = (role: string) => {
+    if (role === 'admin' || role === 'ADMIN') return 'Admin'
+    if (role === 'project_manager' || role === 'MANAGER') return 'Project Manager'
+    if (role === 'employee' || role === 'EMPLOYEE') return 'Employee'
+    return role
   }
+
 
   return (
     <div className="p-4 space-y-6">

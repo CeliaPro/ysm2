@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination'
 import Navbar from '@/components/Navbar'
 
+// Add this import
+import * as XLSX from 'xlsx'
 
 interface ActivityLog {
   id: string;
@@ -43,10 +45,10 @@ interface ApiResponse {
   totalPages: number;
 }
 
- const AdminLogs = () => {
+const AdminLogs = () => {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-   useEffect(() => {
+  useEffect(() => {
     if (!isLoading && (!user || user.role !== 'ADMIN')) {
       router.push('/') // Or push to a 403 page
     }
@@ -88,8 +90,35 @@ interface ApiResponse {
       .finally(() => setIsLoading(false));
   }, [searchTerm, statusFilter, actionFilter, roleFilter, currentPage]);
 
-  // Helper functions remain as in your original code (getActionIcon, getStatusIcon, getRoleBadge, etc.)
-  // ...[keep all your helper functions as is]...
+  // -------------------- EXPORT LOGIC START --------------------
+  const handleExportAll = async () => {
+    try {
+      const res = await fetch(`/api/admin/activity-logs?all=true`);
+      const data: ApiResponse = await res.json();
+      const allLogs = data.logs || [];
+
+      // Prepare data for Excel (flatten user field)
+      const rows = allLogs.map(log => ({
+        Time: log.createdAt,
+        UserName: log.user?.name || 'Unknown',
+        UserEmail: log.user?.email || '',
+        UserRole: log.user?.role || '',
+        Action: log.action,
+        Status: log.status,
+        IP: log.ipAddress || '',
+        Device: log.device || '',
+        Description: log.description || ''
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity Logs');
+      XLSX.writeFile(workbook, 'activity-logs.xlsx');
+    } catch (err) {
+      alert('Error exporting logs. Please try again.');
+    }
+  };
+  // --------------------- EXPORT LOGIC END ---------------------
 
   const getActionIcon = (action: string) => {
     const iconMap: Record<string, React.ComponentType<any>> = {
@@ -164,7 +193,7 @@ interface ApiResponse {
             <RefreshCw className="w-4 h-4 mr-2" />
             Live Refresh
           </Button>
-          <Button variant="outline" size="sm" disabled>
+          <Button variant="outline" size="sm" onClick={handleExportAll}>
             <Download className="w-4 h-4 mr-2" />
             Export All
           </Button>
