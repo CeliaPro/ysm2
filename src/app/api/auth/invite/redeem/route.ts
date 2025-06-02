@@ -1,26 +1,17 @@
-// app/api/auth/redeem/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcrypt'
-import {
-  extractInvitePayload,
-  InviteRole,
-  InviteType,
-} from '@/app/utils/invite.utils'
+import { extractInvitePayload, InviteRole, InviteType } from '@/app/utils/invite.utils'
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
-
+import { createSession } from '@/app/utils/session.utils'
+import UAParser from 'ua-parser-js'
+const UAParserConstructor = (UAParser as any).UAParser || UAParser
 export async function POST(req: NextRequest) {
   try {
     const { token, password, name: nameFromForm } = await req.json()
-
     // 1) decode token
-    let payload: {
-      email: string
-      name: string
-      role: InviteRole
-      type: InviteType
-    }
+    let payload: { email: string; name: string; role: InviteRole; type: InviteType }
     try {
       payload = extractInvitePayload(token)
     } catch (err: any) {
@@ -77,21 +68,41 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Log successful invite redemption
+    // Device info
+    let device: string | undefined = undefined
+    const userAgent = req.headers.get('user-agent') || ''
+    if (userAgent) {
+      const parser = new UAParserConstructor(userAgent)
+      const parsed = parser.getResult()
+      device = [
+        parsed.os?.name, parsed.os?.version, '-', parsed.browser?.name, parsed.browser?.version
+      ].filter(Boolean).join(' ')
+    }
+
+    const sessionId = await createSession(updated.id, req, device)
+
     await logActivity({
       userId: updated.id,
       action: 'REDEEM_INVITE',
       status: 'SUCCESS',
       description: `User ${updated.email} redeemed invite and activated account`,
       req,
+      sessionId,
     })
 
-    // 4) set auth cookie & return
-    return storeJwtInCookie({
+    const response = storeJwtInCookie({
       id: updated.id,
       email: updated.email,
       role: updated.role,
     })
+    response.cookies.set('sessionId', sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    })
+
+    return response
   } catch (error: any) {
     await logActivity({
       action: 'REDEEM_INVITE',

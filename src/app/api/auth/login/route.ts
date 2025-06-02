@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { compare } from 'bcrypt'
 import { prisma } from '@/lib/prisma'
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
-import { logActivity } from '@/app/utils/logActivity' // <-- Import your logger
-
+import { logActivity } from '@/app/utils/logActivity'
+import { createSession } from '@/app/utils/session.utils'
+import UAParser from 'ua-parser-js'
+const UAParserConstructor = (UAParser as any).UAParser || UAParser
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json()
-
     if (!email || !password) {
-      // Log missing fields as a failed attempt (no userId, only email)
       await logActivity({
         action: 'LOGIN',
         status: 'FAILURE',
@@ -23,9 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({ where: { email } })
-
     if (!user || !user.password) {
-      // Log invalid credentials (no user found)
       await logActivity({
         action: 'LOGIN',
         status: 'FAILURE',
@@ -40,7 +38,6 @@ export async function POST(req: NextRequest) {
 
     const passwordMatch = await compare(password, user.password)
     if (!passwordMatch) {
-      // Log invalid credentials (wrong password)
       await logActivity({
         userId: user.id,
         action: 'LOGIN',
@@ -54,36 +51,51 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 👇 ADD THIS: update lastLogin
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     })
 
-    // Log successful login
+    // Device info
+    let device: string | undefined = undefined
+    const userAgent = req.headers.get('user-agent') || ''
+    if (userAgent) {
+        const parser = new UAParserConstructor(userAgent)
+        const parsed = parser.getResult()
+      device = [
+        parsed.os?.name, parsed.os?.version, '-', parsed.browser?.name, parsed.browser?.version
+      ].filter(Boolean).join(' ')
+    }
+
+    const sessionId = await createSession(user.id, req, device)
+
     await logActivity({
       userId: user.id,
       action: 'LOGIN',
       status: 'SUCCESS',
       description: 'User logged in successfully',
       req,
+      sessionId,
     })
 
-    // Set the cookie
     const response = storeJwtInCookie({
       id: user.id,
       email: user.email,
       role: user.role,
     })
+    response.cookies.set('sessionId', sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    })
 
-    // Redirect to /dashboard with cookie headers
     return NextResponse.redirect(new URL('/dashboard', req.url), {
       status: 302,
-      headers: response.headers, // preserve Set-Cookie
+      headers: response.headers,
     })
   } catch (error: any) {
     console.error('Login error:', error)
-    // Log unexpected server error
     await logActivity({
       action: 'LOGIN',
       status: 'FAILURE',

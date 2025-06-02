@@ -19,6 +19,9 @@ const client = new SESClient({
 })
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
+  // Always extract sessionId once at the top
+  const sessionId = req.cookies?.get('sessionId')?.value
+
   try {
     // 1) Read from body
     const { email, name, role, projectIds, type } = (await req.json()) as {
@@ -37,6 +40,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: `Invalid role "${role}" used for invite`,
         req,
+        sessionId,
       })
       return NextResponse.json(
         { error: 'Invalid role – must be EMPLOYEE or MANAGER' },
@@ -55,6 +59,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: `Tried to invite existing user (${email})`,
         req,
+        sessionId,
       })
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -122,13 +127,14 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         },
       })
 
-      // LOG SUCCESSFUL INVITE
+      // LOG SUCCESSFUL INVITE (with sessionId)
       await logActivity({
         userId: user.id,
         action: 'INVITE_USER',
         status: 'SUCCESS',
         description: `Invited ${email} (${role})${projectIds && projectIds.length ? ` to projects: ${projectIds.join(', ')}` : ''}`,
         req,
+        sessionId,
       })
 
       return NextResponse.json(newUser)
@@ -139,6 +145,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'SUCCESS',
         description: `Sent invite link to ${email} (${role})`,
         req,
+        sessionId,
       })
       return NextResponse.json({ success: true })
     }
@@ -149,6 +156,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       status: 'FAILURE',
       description: `Invite failed: ${err.message}`,
       req,
+      sessionId,
     })
     console.error('[INVITE_POST_ERROR]', err)
     return NextResponse.json(

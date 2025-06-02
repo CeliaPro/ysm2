@@ -5,6 +5,9 @@ import { withAuthentication } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
+  // Get sessionId from cookies
+  const sessionId = req.cookies?.get('sessionId')?.value
+
   try {
     const body = await req.json()
     const { title } = body
@@ -17,6 +20,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: 'Attempted to create conversation without valid title',
         req,
+        sessionId,
       })
       return NextResponse.json(
         { success: false, message: 'Title is required and must be a string' },
@@ -36,6 +40,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       status: 'SUCCESS',
       description: `Created conversation with title: "${title}"`,
       req,
+      sessionId,
     })
 
     return NextResponse.json(
@@ -52,6 +57,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       status: 'FAILURE',
       description: `Error creating conversation: ${error.message}`,
       req,
+      sessionId,
     })
     console.error('Error in /api/chat/create:', error)
     return NextResponse.json(

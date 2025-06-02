@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { withAuthentication } from "@/app/utils/auth.utils";
 import { logActivity } from "@/app/utils/logActivity";
 
+// GET: Return all tasks with dependencies. Minimum role: MANAGER
 export const GET = withAuthentication(async (req, user) => {
   try {
     const tasks = await prisma.task.findMany({
@@ -11,7 +12,7 @@ export const GET = withAuthentication(async (req, user) => {
       }
     });
 
-    // Optional: Log that tasks were accessed (for auditing who accessed what)
+    // Log the successful access of tasks
     await logActivity({
       userId: user.id,
       action: 'LIST_TASKS',
@@ -22,6 +23,7 @@ export const GET = withAuthentication(async (req, user) => {
 
     return NextResponse.json({ success: true, data: tasks });
   } catch (err: any) {
+    // Log the failure
     await logActivity({
       userId: user.id,
       action: 'LIST_TASKS',

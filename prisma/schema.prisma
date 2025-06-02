@@ -41,9 +41,9 @@ enum ProjectStatus {
 }
 
 enum TaskStatus {
-  A_FAIRE      // Represents "À faire"
-  EN_COURS     // Represents "En cours"
-  TERMINEE     // Represents "Terminée"
+  A_FAIRE // Represents "À faire"
+  EN_COURS // Represents "En cours"
+  TERMINEE // Represents "Terminée"
 }
 
 enum TaskSeverity {
@@ -54,26 +54,25 @@ enum TaskSeverity {
 }
 
 model ActivityLog {
-  id          String     @id @default(uuid())
-  userId      String?                // Nullable: for failed logins (no user found)
-  user        User?      @relation(fields: [userId], references: [id])
-  action      String                  // e.g. "LOGIN", "FAILED_LOGIN", "UPLOAD", "PASSWORD_CHANGE"
-  status      String                  // "SUCCESS" or "FAILURE"
-  description String?                 // Optional: details like "Wrong password", "File: report.pdf"
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  status      String
+  description String?
   ipAddress   String?
-  device      String?                 // e.g. "Windows 10 - Chrome 124"
-  userAgent   String?                 // Raw UA for extra debugging
-  createdAt   DateTime   @default(now())
+  device      String?
+  userAgent   String?
+  sessionId   String?
+  createdAt   DateTime @default(now())
+  session     Session? @relation("SessionToActivityLogs", fields: [sessionId], references: [id])
 
-  // Indexes for fast queries and filtering
+  // Indexes...
   @@index([action])
   @@index([userId])
   @@index([createdAt])
   @@index([status])
 }
-
-
-
 
 model User {
   id        String     @id @default(cuid())
@@ -96,25 +95,25 @@ model User {
   conversations Conversation[]
   messages      Message[]
   activityLogs  ActivityLog[]
+  sessions      Session[] // <--- here!
 }
 
 model Project {
-  id          String         @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   description String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  archived    Boolean        @default(false)
-  status      ProjectStatus  @default(ACTIF)
-  startDate   DateTime?      // <-- Add this line
-  endDate     DateTime?      // <-- Add this line
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archived    Boolean       @default(false)
+  status      ProjectStatus @default(ACTIF)
+  startDate   DateTime? // <-- Add this line
+  endDate     DateTime? // <-- Add this line
 
   members       ProjectMember[]
   documents     Document[]
   storagePolicy StoragePolicy?
   tasks         Task[]
 }
-
 
 model Task {
   id          String       @id @default(cuid())
@@ -131,11 +130,9 @@ model Task {
   project     Project      @relation(fields: [projectId], references: [id])
 
   // Gantt dependencies: Self-relation
-  dependencies   Task[]    @relation("TaskDependencies")
-  dependedBy     Task[]    @relation("TaskDependencies")
+  dependencies Task[] @relation("TaskDependencies")
+  dependedBy   Task[] @relation("TaskDependencies")
 }
-
-
 
 model ProjectMember {
   id        String      @id @default(cuid())
@@ -238,4 +235,20 @@ model Message {
 
   user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  createdAt    DateTime      @default(now())
+  lastUsedAt   DateTime      @updatedAt
+  userAgent    String?
+  device       String? // For parsed device string
+  ipAddress    String?
+  geoCountry   String?
+  geoCity      String?
+  activityLogs ActivityLog[] @relation("SessionToActivityLogs")
+
+  @@index([userId])
 }

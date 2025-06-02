@@ -6,6 +6,9 @@ import { withAuthentication } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
+  // Get sessionId from cookies
+  const sessionId = req.cookies?.get('sessionId')?.value
+
   try {
     const { conversationId, title } = await req.json()
 
@@ -16,6 +19,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: 'conversationId and/or title missing in request',
         req,
+        sessionId,
       })
       return NextResponse.json(
         { success: false, message: 'conversationId and title are required' },
@@ -35,6 +39,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: `Tried to rename conversation ${conversationId} but not found or unauthorized`,
         req,
+        sessionId,
       })
       return NextResponse.json(
         { success: false, message: 'Conversation not found or unauthorized' },
@@ -52,6 +57,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         status: 'FAILURE',
         description: `Failed to update conversation ${conversationId}`,
         req,
+        sessionId,
       })
       return NextResponse.json(
         { success: false, message: 'Failed to update conversation' },
@@ -65,6 +71,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       status: 'SUCCESS',
       description: `Renamed conversation ${conversationId} to "${title}"`,
       req,
+      sessionId,
     })
 
     return NextResponse.json({
@@ -79,6 +86,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       status: 'FAILURE',
       description: `Internal server error: ${error.message}`,
       req,
+      sessionId,
     })
     console.error('[CHAT_RENAME_ERROR]', error)
     return NextResponse.json(

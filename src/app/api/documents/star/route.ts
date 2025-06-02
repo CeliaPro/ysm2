@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/app/utils/logActivity'
 
 export const POST = withAuthentication(async (req, user) => {
+  // Extract sessionId from cookies
+  const sessionId = req.cookies?.get('sessionId')?.value
+
   const { id, star } = await req.json()
   if (!id) return new Response('Missing id', { status: 400 })
 
@@ -21,6 +24,7 @@ export const POST = withAuthentication(async (req, user) => {
         ? `Starred document with id ${id}`
         : `Unstarred document with id ${id}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: true }))
@@ -32,6 +36,7 @@ export const POST = withAuthentication(async (req, user) => {
       status: 'FAILURE',
       description: `Failed to ${star ? 'star' : 'unstar'} document with id ${id}: ${error.message}`,
       req,
+      sessionId,
     })
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

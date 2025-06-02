@@ -2,19 +2,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { logActivity } from '@/app/utils/logActivity'
-import { prisma } from '@/lib/prisma' // only if you need it elsewhere
-
-// You can use jwt.verify inline, or better: add this helper if not already exported
+import { prisma } from '@/lib/prisma'
 import jwt from 'jsonwebtoken'
 
 export async function GET(req: NextRequest) {
   let userId: string | undefined = undefined
 
-  // Get the JWT cookie from the request
+  // Get JWT cookie from the request
   const jwtToken = req.cookies.get('jwt')?.value
   if (jwtToken) {
     try {
-      // Use the same JWT_SECRET as in your auth.utils.ts
       const decoded: any = jwt.verify(jwtToken, process.env.JWT_SECRET as string)
       userId = decoded?.id
     } catch (e) {
@@ -22,22 +19,41 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Log the logout (if userId is available)
+  // Get sessionId from cookie
+  const sessionId = req.cookies.get('sessionId')?.value
+
+  // Log the logout event (include sessionId)
   await logActivity({
     userId,
     action: 'LOGOUT',
     status: 'SUCCESS',
     description: 'User logged out',
     req,
+    sessionId,
   })
 
-  // Clear the "jwt" cookie by setting it to empty and expired
+  // Delete session from DB (if exists)
+  if (sessionId) {
+    try {
+      await prisma.session.delete({ where: { id: sessionId } })
+    } catch (e) {
+      // Ignore if not found (already expired, etc.)
+    }
+  }
+
+  // Clear cookies
   const response = NextResponse.json({ message: 'Déconnexion réussie' })
   response.cookies.set('jwt', '', {
     httpOnly: true,
     secure: true,
     path: '/',
-    expires: new Date(0), // expires in the past
+    expires: new Date(0),
+  })
+  response.cookies.set('sessionId', '', {
+    httpOnly: true,
+    secure: true,
+    path: '/',
+    expires: new Date(0),
   })
 
   return response

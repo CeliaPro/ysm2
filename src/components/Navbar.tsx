@@ -277,11 +277,11 @@ const Navbar: React.FC<NavbarProps> = ({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
+               <Link href="/settings">
+                 <Settings className="h-4 w-4 mr-2" />
+                  Settings & Sessions
+               </Link>
+               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="h-4 w-4 mr-2" />

@@ -1,13 +1,18 @@
-// app/api/tasks/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { TaskStatus, TaskSeverity } from '@prisma/client'
 import { withAuthentication } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 
+// Helper for sessionId
+function getSessionIdFromRequest(req: NextRequest) {
+  return req.cookies?.get('sessionId')?.value
+}
+
 // GET: All tasks (optionally by projectId)
 export const GET = withAuthentication(async (req, user) => {
+  // If you want to log it, you can also add sessionId here.
+  // For high-volume fetches, you may skip this to avoid too many logs.
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('projectId')
 
@@ -19,26 +24,31 @@ export const GET = withAuthentication(async (req, user) => {
       }
     })
 
-    // Optional: log read access (can be removed if logs are too noisy)
-    await logActivity({
-      userId: user.id,
-      action: 'LIST_TASKS',
-      status: 'SUCCESS',
-      description: projectId
-        ? `Fetched tasks for project ${projectId}`
-        : 'Fetched all tasks',
-      req,
-    })
+    // (Optional) If you want to log GETs, uncomment below:
+    // const sessionId = getSessionIdFromRequest(req)
+    // await logActivity({
+    //   userId: user.id,
+    //   sessionId,
+    //   action: 'LIST_TASKS',
+    //   status: 'SUCCESS',
+    //   description: projectId
+    //     ? `Fetched tasks for project ${projectId}`
+    //     : 'Fetched all tasks',
+    //   req,
+    // })
 
     return NextResponse.json({ success: true, data: tasks })
   } catch (err: any) {
-    await logActivity({
-      userId: user.id,
-      action: 'LIST_TASKS',
-      status: 'FAILURE',
-      description: `Failed to fetch tasks: ${err.message}`,
-      req,
-    })
+    // (Optional) If you want to log GET failures:
+    // const sessionId = getSessionIdFromRequest(req)
+    // await logActivity({
+    //   userId: user.id,
+    //   sessionId,
+    //   action: 'LIST_TASKS',
+    //   status: 'FAILURE',
+    //   description: `Failed to fetch tasks: ${err.message}`,
+    //   req,
+    // })
     return NextResponse.json(
       { success: false, message: err.message || 'Server error' },
       { status: 500 }
@@ -48,6 +58,7 @@ export const GET = withAuthentication(async (req, user) => {
 
 // POST: Create a task (with dependencies)
 export const POST = withAuthentication(async (req, user) => {
+  const sessionId = getSessionIdFromRequest(req)
   try {
     const body = await req.json()
 
@@ -56,7 +67,6 @@ export const POST = withAuthentication(async (req, user) => {
     const endDate = body.endDate ? new Date(body.endDate) : undefined
     const deadline = body.deadline ? new Date(body.deadline) : undefined
 
-    // Array of task IDs this task depends on
     const dependencies = Array.isArray(body.dependencies) ? body.dependencies : []
 
     const taskData: any = {
@@ -83,9 +93,9 @@ export const POST = withAuthentication(async (req, user) => {
       },
     })
 
-    // Log success
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'CREATE_TASK',
       status: 'SUCCESS',
       description: `Created task "${body.title}" in project ${body.projectId}`,
@@ -96,6 +106,7 @@ export const POST = withAuthentication(async (req, user) => {
   } catch (err: any) {
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'CREATE_TASK',
       status: 'FAILURE',
       description: `Failed to create task: ${err.message}`,
@@ -110,12 +121,14 @@ export const POST = withAuthentication(async (req, user) => {
 
 // PUT: Update task (requires MANAGER)
 export const PUT = withAuthentication(async (req, user) => {
+  const sessionId = getSessionIdFromRequest(req)
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   const data = await req.json()
   if (!id) {
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'UPDATE_TASK',
       status: 'FAILURE',
       description: 'Missing task id for update',
@@ -144,6 +157,7 @@ export const PUT = withAuthentication(async (req, user) => {
 
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'UPDATE_TASK',
       status: 'SUCCESS',
       description: `Updated task "${data.title}" with id ${id}`,
@@ -154,6 +168,7 @@ export const PUT = withAuthentication(async (req, user) => {
   } catch (err: any) {
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'UPDATE_TASK',
       status: 'FAILURE',
       description: `Failed to update task with id ${id}: ${err.message}`,
@@ -168,11 +183,13 @@ export const PUT = withAuthentication(async (req, user) => {
 
 // DELETE: Delete task (requires MANAGER)
 export const DELETE = withAuthentication(async (req, user) => {
+  const sessionId = getSessionIdFromRequest(req)
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) {
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'DELETE_TASK',
       status: 'FAILURE',
       description: 'Missing task id for deletion',
@@ -185,6 +202,7 @@ export const DELETE = withAuthentication(async (req, user) => {
     await prisma.task.delete({ where: { id } })
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'DELETE_TASK',
       status: 'SUCCESS',
       description: `Deleted task with id ${id}`,
@@ -194,6 +212,7 @@ export const DELETE = withAuthentication(async (req, user) => {
   } catch (err: any) {
     await logActivity({
       userId: user.id,
+      sessionId,
       action: 'DELETE_TASK',
       status: 'FAILURE',
       description: `Failed to delete task with id ${id}: ${err.message}`,

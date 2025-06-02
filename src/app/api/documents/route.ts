@@ -9,6 +9,7 @@ export const GET = withAuthentication(async () => {
 
 // POST: Create new document, set uploadedBy and updatedBy to current user
 export const POST = withAuthentication(async (req, user) => {
+  const sessionId = req.cookies?.get('sessionId')?.value
   try {
     const { name, description, url, size, type, projectId, tags = [] } = await req.json()
     if (!name || !projectId || !user?.id || !url) {
@@ -24,8 +25,8 @@ export const POST = withAuthentication(async (req, user) => {
         archived: false,
         favorite: false,
         project: { connect: { id: projectId } },
-        uploadedBy: { connect: { id: user.id } }, // Sets userId foreign key
-        updatedBy: { connect: { id: user.id } },  // Sets updatedById
+        uploadedBy: { connect: { id: user.id } },
+        updatedBy: { connect: { id: user.id } },
         tags: tags.length
           ? {
               connectOrCreate: tags.map((tag: string) => ({
@@ -44,6 +45,7 @@ export const POST = withAuthentication(async (req, user) => {
       status: 'SUCCESS',
       description: `Uploaded document "${name}" to project ${projectId}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -57,6 +59,7 @@ export const POST = withAuthentication(async (req, user) => {
       status: 'FAILURE',
       description: `Failed to upload document: ${errorMessage}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: false, error: errorMessage }), { status: 500 })
@@ -65,6 +68,7 @@ export const POST = withAuthentication(async (req, user) => {
 
 // PUT: Allow only ADMIN or MANAGER to update description/project/tags/updatedBy
 export const PUT = withAuthentication(async (req, user) => {
+  const sessionId = req.cookies?.get('sessionId')?.value
   if (!['ADMIN', 'MANAGER'].includes(user.role)) {
     return new Response('Forbidden', { status: 403 })
   }
@@ -98,6 +102,7 @@ export const PUT = withAuthentication(async (req, user) => {
       status: 'SUCCESS',
       description: `Updated document with id ${id}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: true }))
@@ -111,6 +116,7 @@ export const PUT = withAuthentication(async (req, user) => {
       status: 'FAILURE',
       description: `Failed to update document with id ${id}: ${errorMessage}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: false, error: errorMessage }), { status: 500 })
@@ -119,6 +125,7 @@ export const PUT = withAuthentication(async (req, user) => {
 
 // DELETE: Remove from DB only (safe for S3)
 export const DELETE = withAuthentication(async (req, user) => {
+  const sessionId = req.cookies?.get('sessionId')?.value
   const { id } = await req.json()
   if (!id) return new Response('Missing id', { status: 400 })
 
@@ -132,6 +139,7 @@ export const DELETE = withAuthentication(async (req, user) => {
       status: 'SUCCESS',
       description: `Deleted document with id ${id}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: true }))
@@ -145,6 +153,7 @@ export const DELETE = withAuthentication(async (req, user) => {
       status: 'FAILURE',
       description: `Failed to delete document with id ${id}: ${errorMessage}`,
       req,
+      sessionId,
     })
 
     return new Response(JSON.stringify({ success: false, error: errorMessage }), { status: 500 })

@@ -5,6 +5,9 @@ import { logActivity } from "@/app/utils/logActivity";
 
 // Handles: GET /api/projects/[id]/members
 export const GET = withAuthentication(async (req, user) => {
+  // Optionally grab sessionId from cookie
+  const sessionId = req.cookies?.get?.('sessionId')?.value;
+
   // Extract projectId from the URL
   const urlParts = req.nextUrl.pathname.split("/");
   const membersIndex = urlParts.lastIndexOf("members");
@@ -18,6 +21,7 @@ export const GET = withAuthentication(async (req, user) => {
       status: "FAILURE",
       description: "Missing or invalid project id while listing project members",
       req,
+      sessionId,
     });
     return NextResponse.json(
       { success: false, message: "Missing or invalid project id" },
@@ -52,6 +56,7 @@ export const GET = withAuthentication(async (req, user) => {
       status: "SUCCESS",
       description: `Listed members for project ${projectId}`,
       req,
+      sessionId,
     });
 
     return NextResponse.json({ success: true, data: userMembers });
@@ -63,6 +68,7 @@ export const GET = withAuthentication(async (req, user) => {
       status: "FAILURE",
       description: `Error listing project members for project ${projectId}: ${error.message}`,
       req,
+      sessionId,
     });
     return NextResponse.json(
       { success: false, message: "Failed to fetch project members", error: error.message },

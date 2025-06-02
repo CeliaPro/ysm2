@@ -5,6 +5,9 @@ import { NextResponse } from "next/server";
 import { logActivity } from '@/app/utils/logActivity';
 
 export const POST = withAuthentication(async (req, user) => {
+  // Get sessionId from cookie
+  const sessionId = req.cookies?.get?.('sessionId')?.value;
+
   try {
     const { contentType } = await req.json();
     if (!contentType) {
@@ -15,6 +18,7 @@ export const POST = withAuthentication(async (req, user) => {
         status: 'FAILURE',
         description: 'Missing contentType for presigned URL',
         req,
+        sessionId,
       });
       return NextResponse.json({
         success: false,
@@ -32,6 +36,7 @@ export const POST = withAuthentication(async (req, user) => {
       status: 'SUCCESS',
       description: `Generated presigned upload URL for key ${keyZehwani}`,
       req,
+      sessionId,
     });
 
     return NextResponse.json({
@@ -48,6 +53,7 @@ export const POST = withAuthentication(async (req, user) => {
       status: 'FAILURE',
       description: `Error generating presigned URL: ${error.message}`,
       req,
+      sessionId,
     });
     return NextResponse.json({
       success: false,
