@@ -4,18 +4,47 @@ import { prisma } from '@/lib/prisma'
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 import { createSession } from '@/app/utils/session.utils'
-import { UAParser } from 'ua-parser-js';
+import { UAParser } from 'ua-parser-js'
+import { Redis } from '@upstash/redis'
 
-const UAParserConstructor = (UAParser as any).UAParser || UAParser
+// Redis setup (uses env vars)
+const redis = Redis.fromEnv()
+const RATE_LIMIT = 10
+const WINDOW_SECONDS = 60
+
+async function checkRateLimit(ip: string) {
+  const key = `login:rate:${ip}`
+  const attempts = (await redis.incr(key)) || 0
+  if (attempts === 1) {
+    await redis.expire(key, WINDOW_SECONDS)
+  }
+  return attempts > RATE_LIMIT
+}
+
+// ...imports and setup...
+
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    (req as any).ip ||
+    'unknown'
+
+  if (await checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please wait and try again.' },
+      { status: 429 }
+    )
+  }
+
   try {
     const { email, password } = await req.json()
     if (!email || !password) {
       await logActivity({
         action: 'LOGIN',
-        status: 'FAILURE',
+        status: 'FAILURE',  // FIXED HERE!
         description: 'Missing email or password',
         req,
+        ip,
       })
       return NextResponse.json(
         { error: 'Email and password are required' },
@@ -30,6 +59,7 @@ export async function POST(req: NextRequest) {
         status: 'FAILURE',
         description: `Login failed: email not found (${email})`,
         req,
+        ip,
       })
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -45,6 +75,7 @@ export async function POST(req: NextRequest) {
         status: 'FAILURE',
         description: `Login failed: wrong password`,
         req,
+        ip,
       })
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -52,19 +83,42 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // --- DEBUG 2FA ---
+    console.log('2FA DEBUG', user.twoFaEnabled, typeof user.twoFaEnabled);
+
+    // 🔒 ENFORCE 2FA IF ENABLED
+    if (user.twoFaEnabled === true) {
+      await logActivity({
+        userId: user.id,
+        action: 'LOGIN',
+        status: '2FA_REQUIRED', // Or FAILURE if you want, see note above
+        description: '2FA required for user login',
+        req,
+        ip,
+      })
+      return NextResponse.json({
+        twoFaRequired: true,
+        userId: user.id,
+      })
+    }
+
+    // 2FA not enabled, proceed as usual
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     })
 
-    // Device info
     let device: string | undefined = undefined
     const userAgent = req.headers.get('user-agent') || ''
     if (userAgent) {
-        const parser = new UAParserConstructor(userAgent)
-        const parsed = parser.getResult()
+      const parser = new UAParser(userAgent)
+      const parsed = parser.getResult()
       device = [
-        parsed.os?.name, parsed.os?.version, '-', parsed.browser?.name, parsed.browser?.version
+        parsed.os?.name,
+        parsed.os?.version,
+        '-',
+        parsed.browser?.name,
+        parsed.browser?.version,
       ].filter(Boolean).join(' ')
     }
 
@@ -77,6 +131,9 @@ export async function POST(req: NextRequest) {
       description: 'User logged in successfully',
       req,
       sessionId,
+      ip,
+      userAgent,
+      device,
     })
 
     const response = storeJwtInCookie({
@@ -102,6 +159,7 @@ export async function POST(req: NextRequest) {
       status: 'FAILURE',
       description: `Internal server error during login: ${error.message}`,
       req,
+      ip,
     })
     return NextResponse.json(
       { error: 'Internal Server Error' },

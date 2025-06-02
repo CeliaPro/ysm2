@@ -112,7 +112,7 @@ const Navbar: React.FC<NavbarProps> = ({
       icon: <FolderClosed className="h-4 w-4 mr-2" />,
       showIf: isAdmin(),
     },
-     {
+    {
       name: 'Logs',
       path: '/logs',
       icon: <FolderClosed className="h-4 w-4 mr-2" />,
@@ -120,9 +120,10 @@ const Navbar: React.FC<NavbarProps> = ({
     },
   ]
 
-  const filteredNavItems = navItems.filter(
-    (item) => item.showAlways || item.showIf
-  )
+  // 🟢 Only show nav items when user is logged in
+  const filteredNavItems = user
+    ? navItems.filter((item) => item.showAlways || item.showIf)
+    : []
 
   return (
     <header
@@ -168,7 +169,8 @@ const Navbar: React.FC<NavbarProps> = ({
               className="w-full p-4"
             >
               <nav className="flex flex-col gap-2">
-                {filteredNavItems.map((item) => (
+                {/* 🟢 Only show nav links if logged in */}
+                {user && filteredNavItems.map((item) => (
                   <Link
                     key={item.path}
                     href={item.path}
@@ -183,17 +185,29 @@ const Navbar: React.FC<NavbarProps> = ({
                     {item.name}
                   </Link>
                 ))}
-                <Button
-                  variant="ghost"
-                  className="flex items-center px-3 py-2 text-sm"
-                  onClick={() => {
-                    logout()
-                    setIsNavSheetOpen(false)
-                  }}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
+                {/* 🟢 Only show logout if logged in */}
+                {user && (
+                  <Button
+                    variant="ghost"
+                    className="flex items-center px-3 py-2 text-sm"
+                    onClick={() => {
+                      logout()
+                      setIsNavSheetOpen(false)
+                    }}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </Button>
+                )}
+                {/* Optionally, show Home/Login when logged out */}
+                {!user && (
+                  <Link
+                    href="/"
+                    className="flex items-center rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    Home
+                  </Link>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
@@ -222,14 +236,15 @@ const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop links */}
           <nav className="hidden md:flex gap-2">
-            {filteredNavItems.map((item) => (
+            {/* 🟢 Only show nav links if logged in */}
+            {user && filteredNavItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
                 className={`flex items-center rounded-md px-3 py-2 text-sm transition-colors ${
                   isActive(item.path)
-                       ? 'bg-blue-600 text-white shadow'
-                      : 'hover:bg-blue-100 hover:text-blue-900'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'hover:bg-blue-100 hover:text-blue-900'
                 }`}
               >
                 {item.icon}
@@ -243,52 +258,55 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2">
           <ModeToggle />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="relative h-8 w-8 rounded-full"
+          {/* 🟢 Only show avatar/profile dropdown if logged in */}
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="relative h-8 w-8 rounded-full"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage
+                      src={`https://ui-avatars.com/api/?name=${user?.name}`}
+                      alt={user?.name}
+                    />
+                    <AvatarFallback>
+                      {user?.name?.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-56"
+                align="end"
+                forceMount
               >
-                <Avatar className="h-8 w-8">
-                  <AvatarImage
-                    src={`https://ui-avatars.com/api/?name=${user?.name}`}
-                    alt={user?.name}
-                  />
-                  <AvatarFallback>
-                    {user?.name?.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className="w-56"
-              align="end"
-              forceMount
-            >
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {user?.name}
-                  </p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user?.email}
-                  </p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-               <Link href="/settings">
-                 <Settings className="h-4 w-4 mr-2" />
-                  Settings & Sessions
-               </Link>
-               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {user?.name}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings & Sessions
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
     </header>

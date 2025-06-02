@@ -86,6 +86,8 @@ model User {
   lastLogin DateTime?
   isDeleted Boolean?
   user_role String?
+  twoFaEnabled   Boolean   @default(false)
+  twoFaSecret    String?   // base32 TOTP secret
 
   // Relations
   documents     Document[]      @relation("Uploader")

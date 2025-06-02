@@ -12,12 +12,25 @@ import CompareModal from '@/components/CompareModal'
 import assets from '@/app/assets/assets'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppContext } from '@/contexts/AppContext'
+import { useRouter } from 'next/router' 
 
 const AiPage: React.FC = () => {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/')
+    }
+  }, [isLoading, user, router])
+
+  if (isLoading || !user) {
+    return null // Or <Spinner />
+  }
+
+
   const { selectedConversation, createNewConversation } = useAppContext()
 
-  const [isLoading, setIsLoading] = useState(false)
+  const [isAiLoading, setIsLoading] = useState(false)
   const [expand, setExpand] = useState(false)
   const [openCompare, setOpenCompare] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)

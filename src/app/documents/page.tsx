@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import DocumentCard from '@/components/DocumentCard'
 import { Document } from '@/types/project'
@@ -25,6 +26,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function DocumentsPage() {
   const { isLoading, user } = useAuth()
+  const router = useRouter()
+
+    useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/')
+    }
+  }, [isLoading, user, router])
+
+  if (isLoading || !user) {
+    return null // or <Spinner />
+  }
+
+
   const [documents, setDocuments] = useState<Document[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
@@ -505,3 +519,4 @@ export default function DocumentsPage() {
     )
   }
 }
+

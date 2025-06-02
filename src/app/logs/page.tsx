@@ -1,18 +1,20 @@
-'use client';
-import React, { useEffect, useState } from 'react';
+'use client'
+import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   Search, RefreshCw, Download, LogIn, LogOut, Shield, Upload, Edit3, Trash2, Key, UserPlus, UserX,
   Activity, User, TrendingUp, Globe, Monitor, Clock, Calendar, CheckCircle, AlertTriangle, Info, Database
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/aiUi/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import  Navbar  from '@/components/Navbar';
+} from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/aiUi/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination'
+import Navbar from '@/components/Navbar'
 
 
 interface ActivityLog {
@@ -42,6 +44,17 @@ interface ApiResponse {
 }
 
  const AdminLogs = () => {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+   useEffect(() => {
+    if (!isLoading && (!user || user.role !== 'ADMIN')) {
+      router.push('/') // Or push to a 403 page
+    }
+  }, [isLoading, user, router])
+
+  if (isLoading || !user || user.role !== 'ADMIN') {
+    return null // Or show a spinner or a "forbidden" message
+  }
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -49,7 +62,7 @@ interface ApiResponse {
   const [roleFilter, setRoleFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLogsLoading, setIsLoading] = useState(false);
 
   const itemsPerPage = 10;
 

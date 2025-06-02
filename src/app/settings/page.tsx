@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import { SessionManagement } from '@/components/SessionManagement'
+import  SecuritySettings  from '@/components/SecuritySettings'
 
 export default function SettingsPage() {
   const { user, isLoading } = useAuth()
@@ -23,15 +24,16 @@ export default function SettingsPage() {
     )
   }
 
-  // Don’t render if no user (avoid flicker)
   if (!user && !isLoading) return null
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6 space-y-8">
         <SessionManagement />
+        <SecuritySettings /> {/* 👈 ADD THIS LINE */}
       </main>
     </div>
   )
 }
+

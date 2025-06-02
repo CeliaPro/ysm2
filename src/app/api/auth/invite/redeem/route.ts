@@ -5,10 +5,37 @@ import { extractInvitePayload, InviteRole, InviteType } from '@/app/utils/invite
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 import { createSession } from '@/app/utils/session.utils'
-import { UAParser } from 'ua-parser-js';
+import { UAParser } from 'ua-parser-js'
+import { Redis } from '@upstash/redis'
 
-const UAParserConstructor = (UAParser as any).UAParser || UAParser
+// Upstash Redis rate limiting setup
+const redis = Redis.fromEnv()
+const INVITE_RATE_LIMIT = 5
+const INVITE_WINDOW_SECONDS = 600 // 10 minutes
+
+async function checkInviteRateLimit(ip: string) {
+  const key = `invite-redeem:rate:${ip}`
+  const attempts = (await redis.incr(key)) || 0
+  if (attempts === 1) {
+    await redis.expire(key, INVITE_WINDOW_SECONDS)
+  }
+  return attempts > INVITE_RATE_LIMIT
+}
+
 export async function POST(req: NextRequest) {
+  // --- Rate limit check ---
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    (req as any).ip ||
+    'unknown'
+
+  if (await checkInviteRateLimit(ip)) {
+    return NextResponse.json(
+      { error: 'Too many activation attempts. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
   try {
     const { token, password, name: nameFromForm } = await req.json()
     // 1) decode token
@@ -73,7 +100,7 @@ export async function POST(req: NextRequest) {
     let device: string | undefined = undefined
     const userAgent = req.headers.get('user-agent') || ''
     if (userAgent) {
-      const parser = new UAParserConstructor(userAgent)
+      const parser = new UAParser(userAgent)
       const parsed = parser.getResult()
       device = [
         parsed.os?.name, parsed.os?.version, '-', parsed.browser?.name, parsed.browser?.version
