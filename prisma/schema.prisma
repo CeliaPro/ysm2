@@ -243,6 +243,7 @@ model Session {
   user         User          @relation(fields: [userId], references: [id])
   createdAt    DateTime      @default(now())
   lastUsedAt   DateTime      @updatedAt
+  expiresAt    DateTime
   userAgent    String?
   device       String? // For parsed device string
   ipAddress    String?
