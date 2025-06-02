@@ -41,7 +41,7 @@ interface ApiResponse {
   totalPages: number;
 }
 
-export const AdminLogs = () => {
+ const AdminLogs = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');

@@ -5,7 +5,8 @@ import { extractInvitePayload, InviteRole, InviteType } from '@/app/utils/invite
 import { storeJwtInCookie } from '@/app/utils/auth.utils'
 import { logActivity } from '@/app/utils/logActivity'
 import { createSession } from '@/app/utils/session.utils'
-import UAParser from 'ua-parser-js'
+import { UAParser } from 'ua-parser-js';
+
 const UAParserConstructor = (UAParser as any).UAParser || UAParser
 export async function POST(req: NextRequest) {
   try {
