@@ -23,6 +23,7 @@ export const DELETE = withAuthentication(
       })
       return NextResponse.json({ success: false, message: 'Invalid JSON' }, { status: 400 })
     }
+
     const conversationId = body.conversationId as string | undefined
     if (!conversationId) {
       await logActivity({
@@ -35,6 +36,7 @@ export const DELETE = withAuthentication(
       })
       return NextResponse.json({ success: false, message: 'conversationId is required' }, { status: 400 })
     }
+
     try {
       const deleted = await deleteConversation(conversationId, user.id)
       await logActivity({
@@ -45,7 +47,11 @@ export const DELETE = withAuthentication(
         req,
         sessionId,
       })
-      return NextResponse.json({ success: true, message: 'Deleted', data: deleted })
+      return NextResponse.json({
+        success: true,
+        message: 'Conversation supprimée avec succès',
+        data: deleted,
+      })
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : 'Server error'
       const status = msg.includes('not found') ? 404 : 500

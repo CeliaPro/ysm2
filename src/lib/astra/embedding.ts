@@ -10,7 +10,7 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<number[]
   try {
     const response = await openai.embeddings.create({
       model: "text-embedding-3-small",
-      input: texts, // 👈 Batching ici !
+      input: texts, // 
       encoding_format: "float",
     });
 

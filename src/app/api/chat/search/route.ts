@@ -21,16 +21,17 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       database: process.env.MONGODB_URI?.substring(0, 20) + '...',
     });
 
-    if (!conversationId) {
+    // Defensive: Should never happen, but guard for missing user id
+    if (!user?.id || !conversationId) {
       return NextResponse.json(
-        { error: 'Missing conversationId' },
+        { success: false, error: "Utilisateur ou conversationId manquant" },
         { status: 400 }
       );
     }
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
-        { error: 'No messages provided' },
+        { success: false, error: "Aucun message fourni" },
         { status: 400 }
       );
     }
@@ -43,7 +44,8 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
     try {
       docContext = await getContextFromQuery(query, conversationId);
     } catch (searchError) {
-      console.error('Vector search failed:', searchError);
+      console.error('La recherche vectorielle a échoué :', searchError);
+      // Continue with empty context if search fails
     }
 
     const systemPrompt = {
@@ -87,6 +89,7 @@ ${query}
         conversationId,
         stack: saveError instanceof Error ? saveError.stack : undefined,
       });
+      // Continue execution but log the error
     }
 
     const stream = await streamText({
@@ -160,9 +163,9 @@ ${query}
         error:
           error instanceof Error
             ? error.message
-            : 'Internal Server Error',
+            : 'Erreur Interne du Serveur',
       },
       { status: 500 }
     );
   }
-}, 'EMPLOYEE'); // Adjust role if needed
+}, 'EMPLOYEE');

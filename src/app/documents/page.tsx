@@ -76,7 +76,7 @@ export default function DocumentsPage() {
 
   const fetchDocuments = () => {
     setLoading(true)
-    fetch('/api/documents')
+    fetch('/api/docs')
       .then(res => res.json())
       .then((res: any) => {
             console.log('API DATA:', res);
@@ -132,7 +132,7 @@ export default function DocumentsPage() {
       doc.id === document.id ? { ...doc, isStarred: newStar } : doc
     ))
     try {
-      await fetch('/api/documents/star', {
+      await fetch('/api/docs/star', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: document.id, star: newStar }),
@@ -151,7 +151,7 @@ export default function DocumentsPage() {
       doc.id === document.id ? { ...doc, isArchived: newArchived } : doc
     ))
     try {
-      await fetch('/api/documents/archive', {
+      await fetch('/api/docs/archive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: document.id, archived: newArchived }),
@@ -166,7 +166,7 @@ export default function DocumentsPage() {
 
   // ---- DELETE ----
   const handleDeleteDocument = async (document: Document) => {
-    const res = await fetch('/api/documents', {
+    const res = await fetch('/api/docs', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: document.id }),
@@ -241,7 +241,7 @@ export default function DocumentsPage() {
   // ---- UPLOAD DOC ----
   const handleUploadDocument = () => {
     if (!selectedFile) return
-    fetch('/api/documents', {
+    fetch('/api/docs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -43,10 +43,16 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       sessionId,
     })
 
+    // Add a welcome message in the response (not saved to DB)
+    const responseData = {
+      ...conversationData,
+      welcomeMessage: 'Welcome to your new conversation!',
+    }
+
     return NextResponse.json(
       {
         success: true,
-        data: conversationData,
+        data: responseData,
       },
       { status: 201 }
     )

@@ -20,6 +20,7 @@ import copy_icone from './copy.png'
 import edit_text from './edit_text.png'
 import like_icone from './like.png'
 import dislike_icone from './dislike.png'
+import calendar from './calendrier.png'
 
 const assets ={
     logo,
@@ -43,7 +44,8 @@ const assets ={
     copy_icone,
     edit_text,
     like_icone,
-    dislike_icone
+    dislike_icone,
+    calendar
 
 
 

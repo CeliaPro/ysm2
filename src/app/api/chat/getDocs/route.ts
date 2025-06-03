@@ -14,9 +14,8 @@ export async function GET(req: NextRequest) {
       where: {
         conversationId,
         metadata: {
-          equals: {
-            event: "upload",
-          },
+          path: ['event'],
+          equals: 'upload',
         },
       },
       orderBy: {

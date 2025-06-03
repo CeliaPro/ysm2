@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import Image from 'next/image'
 import assets from '@/app/assets/assets'
 import ChatLabel from './ChatLabel'
-
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppContext } from '@/contexts/AppContext'
 import { toast } from 'sonner'
@@ -38,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
     }
     try {
       const res = await fetch('/api/chat/delete', {
-        method: 'DELETE',             // make sure your route exports DELETE
+        method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId }),
@@ -47,9 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Deletion failed')
       }
-      // remove from context
       removeConversation(conversationId)
-      // clear selection if it was the one deleted
       setSelectedConversation((prev) =>
         prev?.id === conversationId ? null : prev
       )
@@ -62,18 +59,14 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
 
   return (
     <div
-      className={`flex flex-col justify-between bg-[#212327] pt-7 transition-all z-50 max-md:absolute max-md:h-screen ${
-        expand ? 'p-4 w-64' : 'md:w-20 w-0 max-md:overflow-hidden'
-      }`}
+      className={`
+        h-screen flex flex-col bg-gray-100 dark:bg-[#212327] transition-all z-50 max-md:absolute max-md:h-screen
+        ${expand ? 'p-4 w-64' : 'md:w-20 w-0 max-md:overflow-hidden'}
+      `}
     >
-      {/* ---------- top (logo, toggle, new chat) ---------- */}
-      <div>
-        {/* logo & toggle */}
-        <div
-          className={`flex ${
-            expand ? 'flex-row gap-10' : 'flex-col items-center gap-8'
-          }`}
-        >
+      {/* --- Fixed Top: logo, toggle, new chat --- */}
+      <div className="sticky top-0 z-10 bg-gray-100 dark:bg-[#212327] pb-3">
+        <div className={`flex ${expand ? 'flex-row gap-10' : 'flex-col items-center gap-8'}`}>
           <Image
             className={expand ? 'w-35' : 'w-10'}
             src={expand ? assets.logo_text : assets.logo}
@@ -81,21 +74,31 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
           />
           <div
             onClick={() => setExpand(!expand)}
-            className="group relative flex items-center justify-center hover:bg-gray-500/20 transition-all duration-300 h-9 w-12 px-2 rounded-lg cursor-pointer"
+            className={`
+              group relative flex items-center justify-center transition-all duration-300 h-9 w-12 px-2 rounded-lg cursor-pointer
+              ${expand 
+                ? 'hover:bg-gray-300/20 dark:hover:bg-gray-500/20' 
+                : 'hover:bg-gray-300/40 dark:hover:bg-gray-500/30'
+              }
+            `}
           >
-            <Image className="md:hidden" src={assets.sidebar} alt="menu" />
+            {/* Icon always visible and readable */}
+            <Image
+              className={`md:hidden ${expand ? '' : ''}`}
+              src={assets.sidebar}
+              alt="menu"
+              style={{ filter: 'invert(20%)' }} // makes icon dark in light mode
+            />
             <Image
               className="hidden md:block w-12"
               src={expand ? assets.colse_sidebar : assets.sidebar}
               alt="sidebar"
+              style={{ filter: 'invert(20%)' }}
             />
             {/* tooltip */}
             <div
-              className={`absolute w-max ${
-                expand
-                  ? 'left-1/2 -translate-x-1/2 top-12'
-                  : '-top-12 left-0'
-              } opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none`}
+              className={`absolute w-max ${expand ? 'left-1/2 -translate-x-1/2 top-12' : '-top-12 left-0'}
+                opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none`}
             >
               {expand ? 'Close sidebar' : 'Open sidebar'}
               <div
@@ -123,26 +126,27 @@ const Sidebar: React.FC<SidebarProps> = ({ expand, setExpand }) => {
             src={assets.chat}
             alt="chat"
           />
-          {expand && <p className="text-white font-medium">New chat</p>}
+          {expand && <p className="font-medium text-gray-800 dark:text-white">New chat</p>}
         </button>
-
-        {/* recents list */}
-        <div className={`mt-8 text-white/25 text-sm ${expand ? 'block' : 'hidden'}`}>
-          <p className="my-1">Recents</p>
-          {conversations.map((c) => (
-            <ChatLabel
-              key={c.id}
-              title={c.title || 'New Chat'}
-              id={c.id}
-              openMenu={openMenu}
-              setOpenMenu={setOpenMenu}
-              onDelete={() => handleDelete(c.id)}
-            />
-          ))}
-        </div>
       </div>
 
-      {/* ---------- bottom (settings & profile) ---------- */}
+      {/* --- Scrollable: recents list --- */}
+      <div className={`flex-1 overflow-y-auto mt-4 ${expand ? '' : 'hidden'}`}>
+        <p className="my-1 text-gray-800 dark:text-white/25 text-sm font-medium">Recents</p>
+        {conversations.map((c) => (
+          <ChatLabel
+            key={c.id}
+            title={c.title || 'New Chat'}
+            id={c.id}
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            onDelete={() => handleDelete(c.id)}
+            // The ChatLabel component should also use text-gray-800 in light, white in dark mode
+          />
+        ))}
+      </div>
+
+      {/* --- Fixed Bottom: settings/profile (if any) --- */}
       <div>
         {/* …existing Get-App + Profile UI… */}
       </div>
