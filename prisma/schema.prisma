@@ -58,7 +58,7 @@ enum TaskSeverity {
 model ActivityLog {
   id          String   @id @default(uuid())
   userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   action      String
   status      String
   description String?
@@ -67,7 +67,7 @@ model ActivityLog {
   userAgent   String?
   sessionId   String?
   createdAt   DateTime @default(now())
-  session     Session? @relation("SessionToActivityLogs", fields: [sessionId], references: [id])
+  session     Session? @relation("SessionToActivityLogs", fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([action])
   @@index([userId])
@@ -127,8 +127,8 @@ model ProjectMember {
   role      ProjectRole
   createdAt DateTime    @default(now())
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
 }
@@ -145,7 +145,7 @@ model Task {
   endDate     DateTime?
   createdAt   DateTime     @default(now())
   projectId   String
-  project     Project      @relation(fields: [projectId], references: [id])
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   dependencies Task[] @relation("TaskDependencies")
   dependedBy   Task[] @relation("TaskDependencies")
@@ -169,9 +169,9 @@ model Document {
   storageId   String?
 
   uploadedBy User     @relation("Uploader", fields: [userId], references: [id], onDelete: Cascade)
-  updatedBy  User?    @relation("Updater", fields: [updatedById], references: [id])
-  project    Project  @relation(fields: [projectId], references: [id])
-  storage    Storage? @relation(fields: [storageId], references: [id])
+  updatedBy  User?    @relation("Updater", fields: [updatedById], references: [id], onDelete: SetNull)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storage    Storage? @relation(fields: [storageId], references: [id], onDelete: SetNull)
   tags       Tag[]    @relation("DocumentTags")
 }
 
@@ -196,7 +196,7 @@ model StoragePolicy {
   allowedTypes  String?
   retentionDays Int?
 
-  project Project @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Invite {
@@ -207,7 +207,7 @@ model Invite {
   invitedByAdminId String
   createdAt        DateTime @default(now())
 
-  invitedBy User @relation("Inviter", fields: [invitedByAdminId], references: [id])
+  invitedBy User @relation("Inviter", fields: [invitedByAdminId], references: [id], onDelete: Cascade)
 }
 
 // ====== ENTERPRISE CHAT: ProjectMessage & FileAttachment ======
@@ -225,8 +225,6 @@ model ProjectMessage {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
-
-// (Optional future: a dedicated FileAttachment model for richer metadata)
 
 // ==== AI Conversation (leave as is, for AI chat only, not project chat) ====
 model Conversation {
@@ -262,7 +260,7 @@ model Message {
 model Session {
   id           String        @id @default(cuid())
   userId       String
-  user         User          @relation(fields: [userId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime      @default(now())
   lastUsedAt   DateTime      @updatedAt
   expiresAt    DateTime
