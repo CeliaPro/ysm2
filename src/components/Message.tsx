@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Markdown from 'react-markdown'
 import { toast } from 'sonner'
 import assets from '@/app/assets/assets'
+import PlanningView from '@/components/PlanningView' // ⬅️ Adjust the path if needed
 
 // ---------- types ----------
 interface MessageProps {
@@ -70,7 +71,6 @@ const Message: React.FC<MessageProps> = ({ role, content }) => {
                     className={`p-1 rounded transition-colors ${feedback === 'like' ? 'text-green-400' : ''}`}
                     aria-label="Like message"
                   >
-                    {/* SVG Like Icon (filled if active) */}
                     <svg
                       className={`w-4 h-4 ${feedback === 'like' ? 'fill-green-400' : 'fill-white/70'}`}
                       viewBox="0 0 24 24"
@@ -84,7 +84,6 @@ const Message: React.FC<MessageProps> = ({ role, content }) => {
                     className={`p-1 rounded transition-colors ${feedback === 'dislike' ? 'text-red-400' : ''}`}
                     aria-label="Dislike message"
                   >
-                    {/* SVG Dislike Icon (filled if active, rotated) */}
                     <svg
                       className={`w-4 h-4 ${feedback === 'dislike' ? 'fill-red-400' : 'fill-white/70'} transform rotate-180`}
                       viewBox="0 0 24 24"
@@ -109,6 +108,10 @@ const Message: React.FC<MessageProps> = ({ role, content }) => {
               />
               <div className="space-y-4 w-full overflow-auto">
                 <Markdown>{content}</Markdown>
+                {/* 👉 PlanningView shows only if it's an AI Planning Assistant message */}
+                {content.includes("AI Planning Assistant") && (
+                  <PlanningView />
+                )}
               </div>
             </>
           )}

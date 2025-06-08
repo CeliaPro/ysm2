@@ -21,8 +21,6 @@ async function checkRateLimit(ip: string) {
   return attempts > RATE_LIMIT
 }
 
-// ...imports and setup...
-
 export async function POST(req: NextRequest) {
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -41,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!email || !password) {
       await logActivity({
         action: 'LOGIN',
-        status: 'FAILURE',  // FIXED HERE!
+        status: 'FAILURE',  
         description: 'Missing email or password',
         req,
         ip,
