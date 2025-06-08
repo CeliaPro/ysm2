@@ -70,24 +70,39 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // -------- Append a message helper --------
   const appendMessage = useCallback(
-    (conversationId: string, message: Message) => {
-      // Update the selected conversation if it matches
-      setSelectedConversation((prev) =>
-        prev && prev.id === conversationId
-          ? { ...prev, messages: [...prev.messages, message] }
-          : prev
-      )
-      // Update it in the conversation list
-      setConversations((list) =>
-        list.map((c) =>
-          c.id === conversationId
-            ? { ...c, messages: [...c.messages, message] }
-            : c
-        )
-      )
-    },
-    []
-  )
+  (conversationId: string, message: Message) => {
+    // Update selectedConversation if it matches
+    setSelectedConversation((prev) => {
+      if (!prev || prev.id !== conversationId) return prev
+      const lastMsg = prev.messages[prev.messages.length - 1]
+      // Replace last ASSISTANT message if streaming, otherwise append
+      if (lastMsg && lastMsg.role === 'ASSISTANT' && message.role === 'ASSISTANT') {
+        const newMessages = [...prev.messages]
+        newMessages[newMessages.length - 1] = message
+        return { ...prev, messages: newMessages }
+      } else {
+        return { ...prev, messages: [...prev.messages, message] }
+      }
+    })
+
+    // Update in conversations list
+    setConversations((list) =>
+      list.map((c) => {
+        if (c.id !== conversationId) return c
+        const lastMsg = c.messages[c.messages.length - 1]
+        if (lastMsg && lastMsg.role === 'ASSISTANT' && message.role === 'ASSISTANT') {
+          const newMessages = [...c.messages]
+          newMessages[newMessages.length - 1] = message
+          return { ...c, messages: newMessages }
+        } else {
+          return { ...c, messages: [...c.messages, message] }
+        }
+      })
+    )
+  },
+  []
+)
+
 
   // -------- Remove a conversation helper --------
   const removeConversation = useCallback(

@@ -1,3 +1,7 @@
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
+import { randomUUID } from "crypto";
 import { getCollection, ensureCollection } from "./client";
 import { loadAndSplitPDFWithContext } from "./loader";
 import { loadAndSplitExcel } from "./loaderExcel";
@@ -7,7 +11,7 @@ import { ChatRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sha256 } from "@/lib/utils/hash";
 
-// Types précis pour une meilleure sécurité
+// ---- Types ----
 export interface SourceEntry {
   documentId: string;
   fileName: string;
@@ -33,7 +37,6 @@ export interface DocumentMetadata {
   sources?: SourceEntry[];
 }
 
-// Type pour les métadonnées dans les messages
 export interface MessageMetadata {
   event: string;
   originalName: string;
@@ -50,19 +53,20 @@ export interface MessageMetadata {
 }
 
 export type RawChunk = {
-  pageContent: string
+  pageContent: string;
   metadata: {
-    pageNumber?: number
-    chunkIndex?: number
-    processingId?: string
-    conversationId?: string
+    pageNumber?: number;
+    chunkIndex?: number;
+    processingId?: string;
+    conversationId?: string;
     [key: string]: string | number | boolean | null | undefined;
-  }
-  status?: 'unchanged' | 'added' | 'removed'
-}
+  };
+  status?: "unchanged" | "added" | "removed";
+};
 
 export interface UploadDocumentFileParams {
-  filePath: string;
+  filePath?: string;           // <-- Now optional
+  fileBuffer?: Buffer;         // <-- New!
   fileName: string;
   userId?: string;
   conversationId?: string;
@@ -77,7 +81,6 @@ interface ChunkUploadResult {
   error?: boolean;
 }
 
-// Type pour le résultat de l'upload de document
 interface UploadDocumentResult {
   success: boolean;
   alreadyExists?: boolean;
@@ -88,7 +91,8 @@ interface UploadDocumentResult {
   reusedChunks?: number;
 }
 
-// Fonction pour vérifier si un document entier existe déjà
+// ---- Helper functions remain unchanged ----
+
 async function isDocumentAlreadyUploaded(metadata: DocumentMetadata): Promise<boolean> {
   if (!metadata.conversationId) return false;
 
@@ -98,29 +102,29 @@ async function isDocumentAlreadyUploaded(metadata: DocumentMetadata): Promise<bo
         conversationId: metadata.conversationId,
         metadata: {
           path: ["event"],
-          equals: "upload"
+          equals: "upload",
         },
         AND: [
           {
             metadata: {
               path: ["originalName"],
-              equals: metadata.originalName
-            }
+              equals: metadata.originalName,
+            },
           },
           {
             metadata: {
               path: ["fileSize"],
-              equals: metadata.fileSize
-            }
+              equals: metadata.fileSize,
+            },
           },
           {
             metadata: {
               path: ["fileType"],
-              equals: metadata.fileType
-            }
-          }
-        ]
-      }
+              equals: metadata.fileType,
+            },
+          },
+        ],
+      },
     });
 
     return !!existingMessages;
@@ -139,26 +143,48 @@ async function getExistingDocumentMetadata(metadata: DocumentMetadata): Promise<
         conversationId: metadata.conversationId,
         metadata: {
           path: ["event"],
-          equals: "upload"
+          equals: "upload",
         },
         AND: [
           { metadata: { path: ["originalName"], equals: metadata.originalName } },
-          { metadata: { path: ["fileSize"], equals: metadata.fileSize } }
-        ]
+          { metadata: { path: ["fileSize"], equals: metadata.fileSize } },
+        ],
       },
       select: {
-        metadata: true
-      }
+        metadata: true,
+      },
     });
 
-    return result?.metadata as unknown as MessageMetadata || null;
+    return (result?.metadata as unknown as MessageMetadata) || null;
   } catch (error) {
     console.error("Erreur lors de la récupération des métadonnées:", error);
     return null;
   }
 }
 
+// ---- Main function with Buffer Support ----
 export async function uploadDocumentFile(params: UploadDocumentFileParams): Promise<UploadDocumentResult> {
+  // SUPPORT FILE BUFFER
+  if (params.fileBuffer) {
+    const tempDir = path.join(os.tmpdir(), "imported-docs");
+    await fs.mkdir(tempDir, { recursive: true });
+    const tempFileName = `${Date.now()}-${randomUUID()}-${params.fileName}`;
+    const tempFilePath = path.join(tempDir, tempFileName);
+    await fs.writeFile(tempFilePath, params.fileBuffer);
+
+    try {
+      // Recursively call with filePath, not fileBuffer (to avoid infinite loop!)
+      return await uploadDocumentFile({
+        ...params,
+        filePath: tempFilePath,
+        fileBuffer: undefined,
+      });
+    } finally {
+      await fs.unlink(tempFilePath).catch(() => {});
+    }
+  }
+
+  // ---- Normal flow (unchanged) ----
   const { filePath, fileName, userId, conversationId, metadata } = params;
 
   if (!metadata || !conversationId) {
@@ -176,7 +202,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
         processingId: metadata.processingId,
         chunks: existingMeta?.totalChunks || 0,
         uniqueChunks: existingMeta?.uniqueChunks || 0,
-        reusedChunks: existingMeta?.reusedChunks || 0
+        reusedChunks: existingMeta?.reusedChunks || 0,
       };
     }
 
@@ -184,15 +210,16 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
     const collection = getCollection();
 
     const ext = fileName.split(".").pop()?.toLowerCase();
-    const docs: RawChunk[] = ext === "xlsx" || ext === "xls"
-      ? await loadAndSplitExcel(filePath)
-      : await loadAndSplitPDFWithContext(filePath);
+    const docs: RawChunk[] =
+      ext === "xlsx" || ext === "xls"
+        ? await loadAndSplitExcel(filePath!)
+        : await loadAndSplitPDFWithContext(filePath!);
 
     if (!docs.length) {
       throw new Error(`Aucun contenu extractible dans : ${fileName}`);
     }
 
-    const hashes = docs.map(d => sha256(d.pageContent));
+    const hashes = docs.map((d) => sha256(d.pageContent));
     const createKey = (convId: string, hash: string) => `${convId}_${hash}`;
 
     // Récupération des documents existants pour cette conversation
@@ -209,20 +236,23 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
     for (let i = 0; i < hashes.length; i += MAX_IN) {
       const batch = hashes.slice(i, i + MAX_IN);
       const batchDocs = await collection
-        .find({ "metadata.conversationId": conversationId,"metadata.chunkHash": { $in: batch } })
+        .find({
+          "metadata.conversationId": conversationId,
+          "metadata.chunkHash": { $in: batch },
+        })
         .toArray();
       existingDocs.push(...(batchDocs as ExistingDoc[]));
     }
 
     const existingKeys = new Set(
-      existingDocs.map(d => createKey(
-        d.metadata.conversationId ?? "",
-        d.metadata.chunkHash ?? ""
-      ))
+      existingDocs.map((d) =>
+        createKey(d.metadata.conversationId ?? "", d.metadata.chunkHash ?? "")
+      )
     );
 
     const BATCH_SIZE = 100;
-    let uniqueCount = 0, reusedCount = 0;
+    let uniqueCount = 0,
+      reusedCount = 0;
     const uploadedChunks: ChunkUploadResult[] = [];
 
     for (let i = 0; i < docs.length; i += BATCH_SIZE) {
@@ -235,9 +265,10 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
       });
 
       // Générer les embeddings uniquement pour les nouveaux chunks
-      const vectors = newChunks.length > 0
-        ? await generateEmbeddingsBatch(newChunks.map(d => d.pageContent))
-        : [];
+      const vectors =
+        newChunks.length > 0
+          ? await generateEmbeddingsBatch(newChunks.map((d) => d.pageContent))
+          : [];
 
       // Traitement du batch
       const batchPromises = batch.map(async (doc, j) => {
@@ -251,7 +282,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
           // Récupérer le chunk existant avec le même hash pour extraire son vecteur
           const existingDoc = await collection.findOne({
             "metadata.conversationId": conversationId,
-            "metadata.chunkHash": hash
+            "metadata.chunkHash": hash,
           }) as { $vector?: number[]; metadata: any } | null;
 
           if (existingDoc && existingDoc.$vector) {
@@ -262,7 +293,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
                 id: fileName + conversationId,
                 source: fileName,
                 chunkIndex: idx,
-                userId: userId || undefined, // <-- FIXED HERE
+                userId: userId || undefined,
                 conversationId,
                 createdAt: new Date().toISOString(),
                 chunkHash: hash,
@@ -273,8 +304,8 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
                 uploadedBy: metadata.uploadedBy,
                 processingId: metadata.processingId,
                 totalChunks: docs.length,
-                pageNumber: doc.metadata.pageNumber ?? null
-              }
+                pageNumber: doc.metadata.pageNumber ?? null,
+              },
             };
             await collection.insertOne(astraDocument);
           }
@@ -283,13 +314,13 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
             chunkIndex: idx,
             reused: true,
             page: doc.metadata.pageNumber,
-            text: doc.pageContent.substring(0, 100) + "..."
+            text: doc.pageContent.substring(0, 100) + "...",
           };
         }
 
         // Trouver l'index dans newChunks pour récupérer le bon vecteur
         const newChunkIndex = newChunks.findIndex(
-          chunk => chunk.pageContent === doc.pageContent
+          (chunk) => chunk.pageContent === doc.pageContent
         );
 
         const astraDocument = {
@@ -299,7 +330,7 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
             id: fileName + conversationId,
             source: fileName,
             chunkIndex: idx,
-            userId: userId || undefined, // <-- FIXED HERE
+            userId: userId || undefined,
             conversationId,
             createdAt: new Date().toISOString(),
             chunkHash: hash,
@@ -310,8 +341,8 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
             uploadedBy: metadata.uploadedBy,
             processingId: metadata.processingId,
             totalChunks: docs.length,
-            pageNumber: doc.metadata.pageNumber ?? null
-          }
+            pageNumber: doc.metadata.pageNumber ?? null,
+          },
         };
 
         await collection.insertOne(astraDocument);
@@ -321,20 +352,20 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
           chunkIndex: idx,
           reused: false,
           page: doc.metadata.pageNumber,
-          text: doc.pageContent.substring(0, 100) + "..."
+          text: doc.pageContent.substring(0, 100) + "...",
         };
       });
 
       const batchResults = await Promise.allSettled(batchPromises);
       batchResults.forEach((result, j) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === "fulfilled") {
           uploadedChunks.push(result.value);
         } else {
           console.error(`Erreur chunk ${i + j}:`, result.reason);
           uploadedChunks.push({
             chunkIndex: i + j,
             reused: false,
-            error: true
+            error: true,
           });
         }
       });
@@ -358,8 +389,8 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
           processingId: metadata.processingId,
           totalChunks: docs.length,
           uniqueChunks: uniqueCount,
-          reusedChunks: reusedCount
-        }
+          reusedChunks: reusedCount,
+        },
       });
     }
 
@@ -369,12 +400,11 @@ export async function uploadDocumentFile(params: UploadDocumentFileParams): Prom
       uniqueChunks: uniqueCount,
       reusedChunks: reusedCount,
       fileName,
-      processingId: metadata.processingId
+      processingId: metadata.processingId,
     };
-
   } catch (error) {
     console.error(`❌ Erreur upload ${fileName}:`, error);
-    if (error instanceof Error && error.message.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+    if (error instanceof Error && error.message.includes("FUNCTION_INVOCATION_TIMEOUT")) {
       throw new Error(`Timeout Vercel: document trop volumineux`);
     }
     throw error;

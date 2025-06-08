@@ -31,6 +31,7 @@ import {
   LogOut,
   Menu,
   TrendingUp,
+  MessageCircle, // <-- Added for Chat link
 } from 'lucide-react'
 
 export interface NavbarProps {
@@ -74,7 +75,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const pathname = usePathname()
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
-  // Define your nav items
+  // Define your nav items (Chat added!)
   const navItems: {
     name: string
     path: string
@@ -82,22 +83,18 @@ const Navbar: React.FC<NavbarProps> = ({
     showAlways?: boolean
     showIf?: boolean
   }[] = [
-
-
-     {
+    {
       name: 'Dashboard',
       path: '/dashboard/analytics',
       icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
       showAlways: true,
     },
-
-   {
+    {
       name: 'Projects',
       path: '/dashboard',
       icon: <TrendingUp className="h-4 w-4 mr-2" />,
       showAlways: true,
     },
- 
     {
       name: 'Documents',
       path: '/documents',
@@ -108,6 +105,12 @@ const Navbar: React.FC<NavbarProps> = ({
       name: 'AI Assistant',
       path: '/ai',
       icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+      showAlways: true,
+    },
+    {
+      name: 'Chat',
+      path: '/chat',
+      icon: <MessageCircle className="h-4 w-4 mr-2" />,
       showAlways: true,
     },
     {
@@ -124,7 +127,7 @@ const Navbar: React.FC<NavbarProps> = ({
     },
   ]
 
-  // 🟢 Only show nav items when user is logged in
+  // Only show nav items when user is logged in
   const filteredNavItems = user
     ? navItems.filter((item) => item.showAlways || item.showIf)
     : []
@@ -138,7 +141,7 @@ const Navbar: React.FC<NavbarProps> = ({
     >
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
-          {/* AI‐sidebar toggle (mobile only) */}
+          {/* AI-sidebar toggle (mobile only) */}
           <Button
             variant="ghost"
             size="icon"
@@ -151,7 +154,7 @@ const Navbar: React.FC<NavbarProps> = ({
             </span>
           </Button>
 
-          {/* Nav‐links sheet toggle (mobile only) */}
+          {/* Nav-links sheet toggle (mobile only) */}
           <Sheet
             open={isNavSheetOpen}
             onOpenChange={setIsNavSheetOpen}
@@ -173,7 +176,6 @@ const Navbar: React.FC<NavbarProps> = ({
               className="w-full p-4"
             >
               <nav className="flex flex-col gap-2">
-                {/* 🟢 Only show nav links if logged in */}
                 {user && filteredNavItems.map((item) => (
                   <Link
                     key={item.path}
@@ -189,7 +191,6 @@ const Navbar: React.FC<NavbarProps> = ({
                     {item.name}
                   </Link>
                 ))}
-                {/* 🟢 Only show logout if logged in */}
                 {user && (
                   <Button
                     variant="ghost"
@@ -203,7 +204,6 @@ const Navbar: React.FC<NavbarProps> = ({
                     Logout
                   </Button>
                 )}
-                {/* Optionally, show Home/Login when logged out */}
                 {!user && (
                   <Link
                     href="/"
@@ -240,7 +240,6 @@ const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop links */}
           <nav className="hidden md:flex gap-2">
-            {/* 🟢 Only show nav links if logged in */}
             {user && filteredNavItems.map((item) => (
               <Link
                 key={item.path}
@@ -262,7 +261,6 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2">
           <ModeToggle />
 
-          {/* 🟢 Only show avatar/profile dropdown if logged in */}
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

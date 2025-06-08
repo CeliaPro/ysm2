@@ -8,6 +8,7 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ========== ENUMS ==========
 enum Role {
   ADMIN
   MANAGER
@@ -33,7 +34,6 @@ enum UserStatus {
   DISABLED
 }
 
-// ADD THIS:
 enum ProjectStatus {
   ACTIF
   EN_ATTENTE
@@ -41,9 +41,9 @@ enum ProjectStatus {
 }
 
 enum TaskStatus {
-  A_FAIRE // Represents "À faire"
-  EN_COURS // Represents "En cours"
-  TERMINEE // Represents "Terminée"
+  A_FAIRE
+  EN_COURS
+  TERMINEE
 }
 
 enum TaskSeverity {
@@ -52,6 +52,8 @@ enum TaskSeverity {
   HAUTE
   CRITIQUE
 }
+
+// ========== MODELS ==========
 
 model ActivityLog {
   id          String   @id @default(uuid())
@@ -67,7 +69,6 @@ model ActivityLog {
   createdAt   DateTime @default(now())
   session     Session? @relation("SessionToActivityLogs", fields: [sessionId], references: [id])
 
-  // Indexes...
   @@index([action])
   @@index([userId])
   @@index([createdAt])
@@ -75,29 +76,30 @@ model ActivityLog {
 }
 
 model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
-  password  String
-  name      String?
-  role      Role       @default(EMPLOYEE)
-  status    UserStatus @default(INVITED)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  lastLogin DateTime?
-  isDeleted Boolean?
-  user_role String?
-  twoFaEnabled   Boolean   @default(false)
-  twoFaSecret    String?   // base32 TOTP secret
+  id           String               @id @default(cuid())
+  email        String               @unique
+  password     String
+  name         String?
+  role         Role                 @default(EMPLOYEE)
+  status       UserStatus           @default(INVITED)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  lastLogin    DateTime?
+  isDeleted    Boolean?
+  user_role    String?
+  twoFaEnabled Boolean              @default(false)
+  twoFaSecret  String?
+  readMessages ProjectMessageRead[]
 
-  // Relations
-  documents     Document[]      @relation("Uploader")
-  updatedDocs   Document[]      @relation("Updater")
-  projects      ProjectMember[]
-  invites       Invite[]        @relation("Inviter")
-  conversations Conversation[]
-  messages      Message[]
-  activityLogs  ActivityLog[]
-  sessions      Session[] // <--- here!
+  documents       Document[]       @relation("Uploader")
+  updatedDocs     Document[]       @relation("Updater")
+  projects        ProjectMember[]
+  invites         Invite[]         @relation("Inviter")
+  conversations   Conversation[]
+  messages        Message[]
+  projectMessages ProjectMessage[]
+  activityLogs    ActivityLog[]
+  sessions        Session[]
 }
 
 model Project {
@@ -108,13 +110,27 @@ model Project {
   updatedAt   DateTime      @updatedAt
   archived    Boolean       @default(false)
   status      ProjectStatus @default(ACTIF)
-  startDate   DateTime? // <-- Add this line
-  endDate     DateTime? // <-- Add this line
+  startDate   DateTime?
+  endDate     DateTime?
 
   members       ProjectMember[]
   documents     Document[]
   storagePolicy StoragePolicy?
   tasks         Task[]
+  messages      ProjectMessage[]
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  userId    String
+  projectId String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
 }
 
 model Task {
@@ -131,22 +147,8 @@ model Task {
   projectId   String
   project     Project      @relation(fields: [projectId], references: [id])
 
-  // Gantt dependencies: Self-relation
   dependencies Task[] @relation("TaskDependencies")
   dependedBy   Task[] @relation("TaskDependencies")
-}
-
-model ProjectMember {
-  id        String      @id @default(cuid())
-  userId    String
-  projectId String
-  role      ProjectRole
-  createdAt DateTime    @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  project Project @relation(fields: [projectId], references: [id])
-
-  @@unique([userId, projectId])
 }
 
 model Document {
@@ -166,7 +168,6 @@ model Document {
   projectId   String
   storageId   String?
 
-  // --- RELATIONS
   uploadedBy User     @relation("Uploader", fields: [userId], references: [id], onDelete: Cascade)
   updatedBy  User?    @relation("Updater", fields: [updatedById], references: [id])
   project    Project  @relation(fields: [projectId], references: [id])
@@ -209,6 +210,25 @@ model Invite {
   invitedBy User @relation("Inviter", fields: [invitedByAdminId], references: [id])
 }
 
+// ====== ENTERPRISE CHAT: ProjectMessage & FileAttachment ======
+model ProjectMessage {
+  id        String               @id @default(cuid())
+  content   String?
+  fileUrl   String?
+  fileName  String?
+  fileType  String?
+  createdAt DateTime             @default(now())
+  userId    String
+  projectId String
+  reads     ProjectMessageRead[]
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// (Optional future: a dedicated FileAttachment model for richer metadata)
+
+// ==== AI Conversation (leave as is, for AI chat only, not project chat) ====
 model Conversation {
   id        String   @id @default(cuid())
   userId    String
@@ -218,7 +238,7 @@ model Conversation {
   updatedAt DateTime @updatedAt
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[] // Messages will be cascade‐deleted
+  messages Message[]
 }
 
 model Message {
@@ -247,11 +267,25 @@ model Session {
   lastUsedAt   DateTime      @updatedAt
   expiresAt    DateTime
   userAgent    String?
-  device       String? // For parsed device string
+  device       String?
   ipAddress    String?
   geoCountry   String?
   geoCity      String?
   activityLogs ActivityLog[] @relation("SessionToActivityLogs")
 
   @@index([userId])
+}
+
+model ProjectMessageRead {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
+  @@index([messageId])
 }

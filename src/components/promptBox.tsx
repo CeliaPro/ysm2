@@ -7,6 +7,7 @@ import React, { useState, useCallback, FormEvent } from 'react'
 import { useAppContext } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import { Paperclip } from "lucide-react"
 
 interface PromptBoxProps {
   setIsLoading: (loading: boolean) => void
@@ -27,6 +28,8 @@ const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
   const [mode, setMode] = useState<Mode>('search')
   const [showModal, setShowModal] = useState(false)
   const [hasFiles, setHasFiles] = useState(false)
+  const [uploading, setUploading] = useState(false)
+
 
   const { user } = useAuth()
   const {
@@ -42,11 +45,7 @@ const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
     }
   }
 
-  // ...file upload & onSubmit functions unchanged
-
-  // (Same functions as you provided)
-
-  // File upload & vectorization
+  // File upload handler
   const handleFilesUpload = async (files: File[]) => {
     if (!user || !selectedConversation) {
       toast.error('Veuillez sélectionner une conversation et vous connecter.')
@@ -80,6 +79,38 @@ const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error)
       toast.error('Une erreur est survenue lors de l\'upload')
+    }
+  }
+
+  // Site document import handler
+  const handleImportDocument = async (doc: { id: string; name: string }) => {
+    if (!user || !selectedConversation) {
+      toast.error('Veuillez sélectionner une conversation et vous connecter.')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/docs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: doc.id,
+          conversationId: selectedConversation.id,
+          userId: user.id,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Document importé et embeddé !')
+        setHasFiles(true)
+        setMode('rag')
+        setShowModal(false)
+      } else {
+        toast.error(`Erreur pendant l'import : ${data.error || res.status}`)
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'import:', error)
+      toast.error('Une erreur est survenue lors de l\'import')
     }
   }
 
@@ -246,100 +277,105 @@ ${
         disabled={isLoading}
       />
 
-      <div className="flex items-center justify-between text-sm mt-2">
-        {/* Mode selection */}
-        <div className="flex items-center gap-2">
-          <p
-            onClick={() => hasFiles && setMode('rag')}
-            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-              ${mode === 'rag'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-              } ${!hasFiles && 'opacity-50 cursor-not-allowed'}`}
-            title={!hasFiles ? 'Upload a document to enable RAG mode' : ''}
-          >
-            <Image
-              src={assets.deepseek}
-              alt="DeepThink"
-              width={16}
-              height={16}
-            />
-            DeepThink (RAG)
-          </p>
-          <p
-            onClick={() => setMode('search')}
-            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-              ${mode === 'search'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-              }`}
-          >
-            <Image
-              src={assets.web_search}
-              alt="Search"
-              width={16}
-              height={16}
-            />
-            Search
-          </p>
-          <p
-            onClick={() => setMode('planning')}
-            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-              ${mode === 'planning'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-              }`}
-          >
-            <Image
-              src={assets.calendar}
-              alt="Planning"
-              width={16}
-              height={16}
-            />
-            Planning
-          </p>
-        </div>
+<div className="flex items-center justify-between text-sm mt-2">
+  {/* Mode selection (left) */}
+  <div className="flex items-center gap-2">
+    <p
+      onClick={() => hasFiles && setMode('rag')}
+      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
+        ${mode === 'rag'
+          ? 'bg-blue-600 text-white border-blue-600'
+          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
+        } ${!hasFiles && 'opacity-50 cursor-not-allowed'}`}
+      title={!hasFiles ? 'Upload or import a document to enable RAG mode' : ''}
+    >
+      <Image src={assets.deepseek} alt="DeepThink" width={16} height={16} />
+      DeepThink (RAG)
+    </p>
+    <p
+      onClick={() => setMode('search')}
+      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
+        ${mode === 'search'
+          ? 'bg-blue-600 text-white border-blue-600'
+          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
+        }`}
+    >
+      <Image src={assets.web_search} alt="Search" width={16} height={16} />
+      Search
+    </p>
+    <p
+      onClick={() => setMode('planning')}
+      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
+        ${mode === 'planning'
+          ? 'bg-blue-600 text-white border-blue-600'
+          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
+        }`}
+    >
+      <Image src={assets.calendar} alt="Planning" width={16} height={16} />
+      Planning
+    </p>
+  </div>
 
-        {/* File upload and send */}
-        <div className="flex items-center gap-2">
-          <div
-            className="flex items-center gap-3 hover:bg-gray-200 dark:hover:bg-white/10 px-3 py-2 rounded-lg cursor-pointer"
-            onClick={() => setShowModal(true)}
-          >
-            <Image
-              className="w-5 h-5"
-              src={assets.pin_doc}
-              alt="Upload"
-            />
-          </div>
+  {/* Upload and Send (right) */}
+  <div className="flex items-center gap-2">
+    <button
+      type="button"
+      onClick={() => setShowModal(true)}
+      className="
+        flex items-center justify-center w-9 h-9 rounded-full
+        bg-gray-200 hover:bg-blue-100 dark:bg-blue-600 dark:hover:bg-blue-500
+        transition
+        focus:outline-none focus:ring-2 focus:ring-blue-400
+        shadow
+      "
+      title="Ajouter un document"
+    >
+      <Paperclip className="w-5 h-5 text-blue-600 dark:text-white" />
+    </button>
+    {/* UploadModal */}
+    <UploadModal
+      isOpen={showModal}
+      onClose={() => setShowModal(false)}
+      userId={user?.id || ''}
+      loading={uploading}
+      onUpload={async (files) => {
+        setUploading(true);
+        try {
+          await handleFilesUpload(files);
+        } finally {
+          setUploading(false);
+        }
+      }}
+      onImportDocument={async (doc) => {
+        setUploading(true);
+        try {
+          await handleImportDocument(doc);
+        } finally {
+          setUploading(false);
+        }
+      }}
+    />
+    <button
+      type="submit"
+      disabled={!prompt || isLoading}
+      className={`
+        w-9 h-9 flex items-center justify-center rounded-full
+        bg-gray-400 dark:bg-[#71717a] text-white transition
+        ${prompt ? 'bg-blue-500 hover:bg-blue-600' : 'cursor-not-allowed'}
+      `}
+      title="Envoyer"
+    >
+      <Image
+        className="w-4 h-4"
+        src={assets.up_arrow}
+        alt="Send"
+        width={16}
+        height={16}
+      />
+    </button>
+  </div>
+</div>
 
-          <UploadModal
-            isOpen={showModal}
-            onClose={() => setShowModal(false)}
-            onUpload={handleFilesUpload}
-          />
-
-          <button
-            type="submit"
-            disabled={!prompt || isLoading}
-            className={`
-              rounded-full p-2 transition
-              ${prompt 
-                ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                : 'bg-gray-400 dark:bg-[#71717a] text-white cursor-not-allowed'
-              }
-            `}
-          >
-            <Image
-              className="w-3.5 aspect-square"
-              src={assets.up_arrow}
-              alt="Send"
-              width={14}
-              height={14}
-            />
-          </button>
-        </div>
-      </div>
     </form>
   )
 }

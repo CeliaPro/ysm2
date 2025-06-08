@@ -1,33 +1,70 @@
 'use client'
 
 import { useEffect, useState, useRef, Fragment } from 'react'
-import { Dialog, Transition } from '@headlessui/react'
+import { Dialog, Transition, Tab } from '@headlessui/react'
 import { Button } from '@/components/ui/button'
-import { FileText, XCircle, Upload } from 'lucide-react'
+import { FileText, XCircle, Upload, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/aiUi/spinner'
+
+interface DocumentItem {
+  id: string
+  name: string
+  size?: number
+  createdAt?: string
+}
 
 interface UploadModalProps {
   isOpen: boolean
   onClose: () => void
   onUpload: (files: File[]) => Promise<void>
+  onImportDocument: (doc: DocumentItem) => Promise<void>
+  userId: string
+  loading?: boolean 
 }
 
-const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
+const UploadModal = ({
+  isOpen,
+  onClose,
+  onUpload,
+  onImportDocument,
+  userId,
+  loading = false,
+}: UploadModalProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
-  const [loading, setLoading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tabIdx, setTabIdx] = useState(0)
+
+  // Import tab
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [importLoading, setImportLoading] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSearch, setImportSearch] = useState('')
 
   useEffect(() => {
     if (!isOpen) {
       setFiles([])
       setError(null)
-      setLoading(false)
+      setTabIdx(0)
+      setDocuments([])
+      setImportSearch('')
+      setImportError(null)
+      setImportLoading(false)
     }
-  }, [isOpen])
+    if (isOpen && userId) {
+      setImportLoading(true)
+      setImportError(null)
+      fetch(`/api/docs/list?userId=${userId}`)
+        .then((res) => res.json())
+        .then((data) => setDocuments(data.documents || []))
+        .catch(() => setImportError("Erreur lors du chargement des documents"))
+        .finally(() => setImportLoading(false))
+    }
+  }, [isOpen, userId])
 
+  // Upload tab handlers
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragActive(false)
@@ -51,7 +88,6 @@ const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
 
   const handleUpload = async () => {
     if (files.length === 0) return
-    setLoading(true)
     setError(null)
     try {
       await onUpload(files)
@@ -61,8 +97,6 @@ const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
       setError("Échec de l'upload. Veuillez réessayer.")
       // eslint-disable-next-line no-console
       console.error('Erreur lors de l\'upload:', err)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -71,23 +105,28 @@ const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
   }
 
   // File size formatting
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return ''
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / 1048576).toFixed(1)} MB`
   }
 
-  // Get icon by type
+  // Get icon by type (optional, could be improved with doc.type)
   const getFileIcon = (fileType: string): React.ReactNode => {
     if (fileType?.includes('pdf')) return <FileText className="h-4 w-4 text-blue-500" />
     if (fileType?.includes('xls') || fileType?.includes('sheet')) return <FileText className="h-4 w-4 text-green-500" />
     return <FileText className="h-4 w-4 text-gray-500" />
   }
 
+  // Filter documents by search (import tab)
+  const filteredDocs = documents.filter((doc) =>
+    doc.name?.toLowerCase().includes(importSearch.toLowerCase())
+  )
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
-        {/* Backdrop */}
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -111,117 +150,223 @@ const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 shadow-xl transition-all">
+              <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 shadow-xl transition-all relative">
+                {/* Overlay spinner during upload */}
+                {loading && (
+                  <div className="absolute inset-0 z-50 bg-white/80 flex flex-col items-center justify-center">
+                    <Spinner className="h-8 w-8 mb-4 text-blue-600" />
+                    <span className="font-medium text-gray-700 text-lg">Uploading...</span>
+                  </div>
+                )}
+
                 <Dialog.Title className="text-xl font-semibold text-gray-900 flex justify-between items-center">
-                  <span>Importer des documents</span>
+                  <span>Ajouter un document à la conversation</span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={onClose}
                     className="p-1 h-auto"
+                    disabled={loading}
                   >
                     <XCircle className="h-5 w-5 text-gray-500" />
                   </Button>
                 </Dialog.Title>
 
-                {/* Dropzone */}
-                <div className="mt-6">
-                  <div
-                    className={cn(
-                      "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                      dragActive
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-300 hover:border-gray-400"
-                    )}
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      multiple
-                      onChange={handleFileChange}
-                    />
-                    <Upload className="mx-auto h-12 w-12 text-gray-300" />
-                    <p className="mt-2 text-sm text-gray-600">
-                      Dépose tes fichiers PDF, XLS, XLSX ici ou <span className="font-medium text-blue-600">clique pour choisir</span>
-                    </p>
-                  </div>
-                </div>
+                <Tab.Group selectedIndex={tabIdx} onChange={setTabIdx}>
+                  <Tab.List className="flex mt-6 space-x-2">
+                    <Tab
+                      className={({ selected }) =>
+                        cn(
+                          "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition",
+                          selected
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        )
+                      }
+                      disabled={loading}
+                    >
+                      Depuis mon appareil
+                    </Tab>
+                    <Tab
+                      className={({ selected }) =>
+                        cn(
+                          "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition",
+                          selected
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        )
+                      }
+                      disabled={loading}
+                    >
+                      Depuis le site
+                    </Tab>
+                  </Tab.List>
 
-                {/* Selected files list */}
-                {files.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="font-medium text-sm text-gray-500 mb-2">
-                      Fichiers sélectionnés ({files.length})
-                    </h3>
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                      {files.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex justify-between items-start border rounded-lg p-3 border-gray-200"
-                        >
-                          <div className="flex items-start space-x-3">
-                            <div className="mt-0.5">{getFileIcon(file.type)}</div>
-                            <div className="flex flex-col">
-                              <span className="font-medium text-sm truncate max-w-[200px]">
-                                {file.name}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {formatFileSize(file.size)}
-                              </span>
-                            </div>
+                  <Tab.Panels className="mt-4">
+                    {/* Tab 1: File upload */}
+                    <Tab.Panel>
+                      <div
+                        className={cn(
+                          "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                          dragActive
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-300 hover:border-gray-400"
+                        )}
+                        onClick={() => !loading && fileInputRef.current?.click()}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        style={loading ? { pointerEvents: 'none', opacity: 0.6 } : {}}
+                      >
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          className="hidden"
+                          multiple
+                          onChange={handleFileChange}
+                          disabled={loading}
+                        />
+                        <Upload className="mx-auto h-12 w-12 text-gray-300" />
+                        <p className="mt-2 text-sm text-gray-600">
+                          Dépose tes fichiers PDF, XLS, XLSX ici ou <span className="font-medium text-blue-600">clique pour choisir</span>
+                        </p>
+                      </div>
+                      {files.length > 0 && (
+                        <div className="mt-6">
+                          <h3 className="font-medium text-sm text-gray-500 mb-2">
+                            Fichiers sélectionnés ({files.length})
+                          </h3>
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                            {files.map((file, index) => (
+                              <div
+                                key={index}
+                                className="flex justify-between items-start border rounded-lg p-3 border-gray-200"
+                              >
+                                <div className="flex items-start space-x-3">
+                                  <div className="mt-0.5">{getFileIcon(file.type)}</div>
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-sm truncate max-w-[200px]">
+                                      {file.name}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {formatFileSize(file.size)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="p-1 h-auto text-gray-400 hover:text-red-500"
+                                  onClick={() => removeFile(index)}
+                                  disabled={loading}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-1 h-auto text-gray-400 hover:text-red-500"
-                            onClick={() => removeFile(index)}
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Error msg */}
-                {error && (
-                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                    <p>{error}</p>
-                  </div>
-                )}
-
-                {/* Action buttons */}
-                <div className="mt-6 flex justify-end space-x-3">
-                  <Button
-                    variant="outline"
-                    onClick={onClose}
-                    disabled={loading}
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    onClick={handleUpload}
-                    disabled={files.length === 0 || loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner className="mr-2 h-4 w-4" />
-                        <span>Chargement...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        <span>Uploader et embeder</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
+                      )}
+                      {error && (
+                        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                          <p>{error}</p>
+                        </div>
+                      )}
+                      <div className="mt-6 flex justify-end space-x-3">
+                        <Button
+                          variant="outline"
+                          onClick={onClose}
+                          disabled={loading}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          onClick={handleUpload}
+                          disabled={files.length === 0 || loading}
+                        >
+                          {loading ? (
+                            <>
+                              <Spinner className="mr-2 h-4 w-4" />
+                              <span>Chargement...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-2 h-4 w-4" />
+                              <span>Uploader et embeder</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </Tab.Panel>
+                    {/* Tab 2: Import from site */}
+                    <Tab.Panel>
+                      <div className="mb-4">
+                        <input
+                          type="text"
+                          value={importSearch}
+                          onChange={e => setImportSearch(e.target.value)}
+                          placeholder="Rechercher un document..."
+                          className="w-full border rounded-lg p-2 text-sm"
+                          disabled={loading}
+                        />
+                      </div>
+                      {importLoading ? (
+                        <div className="flex items-center justify-center py-10">
+                          <Spinner className="h-6 w-6 mr-2" />
+                          <span>Chargement...</span>
+                        </div>
+                      ) : importError ? (
+                        <div className="text-red-500 text-sm mb-4">{importError}</div>
+                      ) : (
+                        <div className="max-h-64 overflow-y-auto space-y-2">
+                          {filteredDocs.length === 0 && (
+                            <div className="text-gray-500 text-sm py-8 text-center">
+                              Aucun document trouvé
+                            </div>
+                          )}
+                          {filteredDocs.map((doc) => (
+                            <div
+                              key={doc.id}
+                              className="flex items-center justify-between border rounded-lg p-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-5 w-5 text-blue-500" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-sm truncate max-w-[160px]">
+                                    {doc.name}
+                                  </span>
+                                  {doc.size && (
+                                    <span className="text-xs text-gray-500">
+                                      {formatFileSize(doc.size)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  await onImportDocument(doc)
+                                  onClose()
+                                }}
+                                className="flex items-center gap-2"
+                                disabled={loading}
+                              >
+                                <Download className="h-4 w-4" />
+                                Importer
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-6 flex justify-end">
+                        <Button variant="outline" onClick={onClose} disabled={loading}>
+                          Fermer
+                        </Button>
+                      </div>
+                    </Tab.Panel>
+                  </Tab.Panels>
+                </Tab.Group>
               </Dialog.Panel>
             </Transition.Child>
           </div>

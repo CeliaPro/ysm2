@@ -357,21 +357,26 @@ export default function CompareModal({
                   <div className="w-full md:w-1/2 mt-4 md:mt-0">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-medium text-sm text-gray-500">Résultats de la comparaison</h3>
-                      <Button
-                        size="sm"
-                        onClick={handleCompare}
-                        disabled={selectedDocs.length !== 2}
-                        title={selectedDocs.length !== 2 ? "Sélectionnez deux documents pour comparer" : ""}
-                      >
-                        {comparing ? (
-                          <>
-                            <Spinner className="mr-2 h-4 w-4" />
-                            Comparaison...
-                          </>
-                        ) : (
-                          "Comparer"
-                        )}
-                      </Button>
+                  <Button
+                  type="button"
+                  onClick={handleCompare}
+                  disabled={selectedDocs.length !== 2}
+                  className={`
+                    flex items-center gap-2 px-4 py-2 rounded-md border
+                    border-blue-400 bg-blue-50
+                    font-semibold
+                    !text-blue-700
+                    ${selectedDocs.length !== 2 ? "!opacity-100 !text-blue-300 !bg-blue-50" : "hover:bg-blue-100 hover:!text-blue-800"}
+                    disabled:!text-blue-300 disabled:!bg-blue-50
+                    disabled:!opacity-100 disabled:!cursor-not-allowed
+                  `}
+                >
+                  <FileText className="w-4 h-4 !text-blue-300" />
+                  <span className="!text-blue-300">Compare Documents</span>
+                </Button>
+
+
+
                     </div>
                     {/* Advanced options */}
                     {selectedDocs.length === 2 && !comparing && !comparisonResult && (
