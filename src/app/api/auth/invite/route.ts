@@ -71,7 +71,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
     const token = generateInviteToken(email, name, role, type)
 
     // 5) Build invite link
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ysm2.vercel.app/setpassword'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ysm2.vercel.app'
     const inviteLink = `${baseUrl}/setpassword?token=${token}`
 
     // 6) Fetch project names for the invite email
