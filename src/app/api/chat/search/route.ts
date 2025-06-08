@@ -5,12 +5,19 @@ import { streamText } from 'ai';
 import { openai as aiProvider } from '@ai-sdk/openai';
 import { getContextFromQuery } from '@/lib/astra/search';
 import { addMessageToConversation } from '@/lib/actions/conversations/conversation';
-import { withAuthentication } from '@/app/utils/auth.utils';
+// Remove withAuthentication import
 
-export const POST = withAuthentication(async (req: NextRequest, user) => {
+import { getUserFromRequest } from '@/app/utils/auth.utils'; // You MUST provide this util, see below
+
+export async function POST(req: NextRequest) {
   try {
-    console.log('Starting chat request in environment:', process.env.NODE_ENV);
+    // ---- AUTHENTICATION (Inline, not wrapped) ----
+    const user = await getUserFromRequest(req); // <-- Use your logic here!
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 });
+    }
 
+    // ---- Request Parsing ----
     const { messages, conversationId } = await req.json();
 
     console.log('Request details:', {
@@ -21,14 +28,12 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       database: process.env.MONGODB_URI?.substring(0, 20) + '...',
     });
 
-    // Defensive: Should never happen, but guard for missing user id
     if (!user?.id || !conversationId) {
       return NextResponse.json(
         { success: false, error: "Utilisateur ou conversationId manquant" },
         { status: 400 }
       );
     }
-
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { success: false, error: "Aucun message fourni" },
@@ -36,16 +41,15 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       );
     }
 
+    // ---- Context ----
     const lastUserMsg = messages.filter((m) => m.role === 'USER').slice(-1)[0];
     const query = lastUserMsg?.content ?? '';
 
-    // Context search
     let docContext = '';
     try {
       docContext = await getContextFromQuery(query, conversationId);
     } catch (searchError) {
       console.error('La recherche vectorielle a échoué :', searchError);
-      // Continue with empty context if search fails
     }
 
     const systemPrompt = {
@@ -69,7 +73,7 @@ ${query}
 `,
     };
 
-    // Save user message
+    // ---- Save user message ----
     try {
       await addMessageToConversation({
         content: query,
@@ -89,9 +93,9 @@ ${query}
         conversationId,
         stack: saveError instanceof Error ? saveError.stack : undefined,
       });
-      // Continue execution but log the error
     }
 
+    // ---- STREAM ----
     const stream = await streamText({
       model: aiProvider('gpt-4o-mini'),
       messages: [
@@ -113,7 +117,6 @@ ${query}
             fullResponse += chunk;
             controller.enqueue(encoder.encode(chunk));
           }
-
           try {
             await addMessageToConversation({
               content: fullResponse,
@@ -132,11 +135,9 @@ ${query}
               error: saveError,
               userId: user.id,
               conversationId,
-              stack:
-                saveError instanceof Error ? saveError.stack : undefined,
+              stack: saveError instanceof Error ? saveError.stack : undefined,
             });
           }
-
           controller.close();
         } catch (err) {
           console.error('Stream error:', err);
@@ -168,4 +169,4 @@ ${query}
       { status: 500 }
     );
   }
-}, 'EMPLOYEE');
+}

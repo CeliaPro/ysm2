@@ -95,3 +95,27 @@ export function withAuthentication(
     return NextResponse.json(result)
   }
 }
+export async function getUserFromRequest(request: NextRequest): Promise<User | null> {
+  const token = request.cookies.get('jwt')?.value
+  const sessionId = request.cookies.get('sessionId')?.value
+
+  if (!token || !sessionId) {
+    return null
+  }
+
+  let user: User
+  try {
+    user = jwt.verify(token, JWT_SECRET) as User
+  } catch {
+    return null
+  }
+
+  // Check session validity & expiration
+  const session = await prisma.session.findUnique({ where: { id: sessionId } })
+  const now = new Date()
+  if (!session || (session.expiresAt && now > session.expiresAt)) {
+    return null
+  }
+
+  return user
+}

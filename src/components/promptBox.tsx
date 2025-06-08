@@ -174,21 +174,21 @@ const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
 
           const assistantResponse = `🛠️ **AI Planning Assistant**
 
-### 🧱 Work Breakdown Structure:
-${planningData.partialWBS
-  .map(
-    (task: PlanningTask) =>
-      `- **${task.task}** (${task.description}) – _${task.duration ?? '???'} days_`
-  )
-  .join('\n')}
+          ### 🧱 Work Breakdown Structure:
+          ${planningData.partialWBS
+            .map(
+              (task: PlanningTask) =>
+                `- **${task.task}** (${task.description}) – _${task.duration ?? '???'} days_`
+            )
+            .join('\n')}
 
-${
-  planningData.missingFields.length > 0
-    ? `\n### ❓ Missing Information:\n` +
-      planningData.missingFields.map((f: { question: string }) => `• ${f.question}`).join('\n')
-    : '\n✅ No missing information!'
-}
-`
+          ${
+            planningData.missingFields.length > 0
+              ? `\n### ❓ Missing Information:\n` +
+                planningData.missingFields.map((f: { question: string }) => `• ${f.question}`).join('\n')
+              : '\n✅ No missing information!'
+          }
+          `
           const assistantMsg: Message = {
             role: 'ASSISTANT',
             content: assistantResponse,
