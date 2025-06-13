@@ -6,7 +6,10 @@ export async function GET(req: NextRequest) {
   const conversationId = searchParams.get("conversationId");
 
   if (!conversationId) {
-    return new NextResponse("Missing conversationId", { status: 400 });
+    return NextResponse.json(
+      { success: false, message: "Identifiant de conversation manquant." },
+      { status: 400 }
+    );
   }
 
   try {
@@ -23,9 +26,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(messages);
+    return NextResponse.json({ success: true, data: messages });
   } catch (err) {
     console.error(err);
-    return new NextResponse("Erreur serveur", { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Erreur serveur." },
+      { status: 500 }
+    );
   }
 }

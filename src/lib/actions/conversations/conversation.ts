@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
  import { ChatRole, Prisma } from '@prisma/client';
- import { MessageMetadata, SafeMetadata } from '@/types/index';
+ import { MessageMetadata, SafeMetadata } from '@/types';
   import { withPrisma } from '@/lib/utils/withPrisma';
 
 
@@ -54,18 +54,18 @@ import { prisma } from '@/lib/prisma';
          }
        }
  
-       const safeMetadata: SafeMetadata = metadata ? JSON.parse(JSON.stringify(metadata)) : undefined;
- 
- 
-       return await prisma.message.create({
-         data: {
-           conversationId,
-           userId,
-           content,
-           role,
-           metadata: safeMetadata,
-         },
-       });
+ const safeMetadata: SafeMetadata | undefined = metadata ? JSON.parse(JSON.stringify(metadata)) : undefined;
+
+
+ return await prisma.message.create({
+   data: {
+     conversationId,
+     userId,
+     content,
+     role,
+     metadata: safeMetadata === null ? undefined : safeMetadata,
+   },
+ });
      } catch (error) {
        console.error('Error adding message:', error);
        throw error;
@@ -108,6 +108,14 @@ export async function deleteConversation(conversationId: string, userId: string)
       where: { id: conversationId },
     });
 
+    // ADD THIS LOGGING:
+    console.log('Deleting conversation:', {
+      conversationId,
+      userId,
+      found: conversation ? true : false,
+      conversationUserId: conversation?.userId,
+    });
+
     if (!conversation || conversation.userId !== userId) {
       throw new Error("Conversation not found or unauthorized");
     }
@@ -117,6 +125,7 @@ export async function deleteConversation(conversationId: string, userId: string)
     });
   });
 }
+
 
  
  export async function renameConversation(conversationId: string, newTitle: string) {

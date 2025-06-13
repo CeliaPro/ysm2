@@ -6,17 +6,30 @@ export const GET = withAuthentication(async (req: NextRequest, user) => {
   try {
     const collection = getPlanningCollection();
 
-    // If you want to show only plans created by the user, uncomment and use this query:
+    // Show only plans created by the user (uncomment if needed):
     // const latest = await collection.findOne({ createdBy: user.id }, { sort: { "createdAt": -1 } });
 
-    // If you want the latest globally (for all users), keep as is:
+    // Show latest plan globally (all users)
     const latest = await collection.findOne({}, { sort: { "createdAt": -1 } });
 
+    if (!latest) {
+      return NextResponse.json(
+        { success: false, error: "Aucun planning trouvé." },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
-      tasks: latest?.partialWBS || []
+      success: true,
+      planningId: latest._id,
+      tasks: latest.partialWBS,
+      missingFields: latest.missingFields,
     });
   } catch (err) {
-    console.error("Error in /api/planning/latest:", err);
-    return NextResponse.json({ error: "Échec du chargement de la planification" }, { status: 500 });
+    console.error("Erreur dans /api/planning/latest:", err);
+    return NextResponse.json(
+      { success: false, error: "Échec du chargement de la planification." },
+      { status: 500 }
+    );
   }
 }, "EMPLOYEE");

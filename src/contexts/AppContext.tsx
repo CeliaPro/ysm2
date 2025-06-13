@@ -1,4 +1,3 @@
-// contexts/AppContext.tsx
 'use client'
 
 import React, {
@@ -12,7 +11,7 @@ import React, {
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 
-// -------------------- Types --------------------
+// --- Types ---
 export interface Message {
   id?: string
   role: 'USER' | 'ASSISTANT'
@@ -41,17 +40,16 @@ export interface AppContextType {
   conversations: Conversation[]
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>
   selectedConversation: Conversation | null
-  setSelectedConversation: React.Dispatch<
-    React.SetStateAction<Conversation | null>
-  >
+  setSelectedConversation: React.Dispatch<React.SetStateAction<Conversation | null>>
   fetchUsersConversations: () => Promise<void>
-  createNewConversation: () => Promise<Conversation | null>
+  createNewConversation: (opts?: { title?: string }) => Promise<Conversation | null>
   appendMessage: (conversationId: string, message: Message) => void
   removeConversation: (conversationId: string) => void
   isLoading: boolean
+  // Optionally add user object here if needed
 }
 
-// ------------------ Context --------------------
+// --- Context ---
 const AppContext = createContext<AppContextType | null>(null)
 
 export const useAppContext = (): AppContextType => {
@@ -60,7 +58,7 @@ export const useAppContext = (): AppContextType => {
   return ctx
 }
 
-// --------------- Provider ---------------------
+// --- Provider ---
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -68,50 +66,45 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null)
 
-  // -------- Append a message helper --------
+  // ---- Append a message helper ----
   const appendMessage = useCallback(
-  (conversationId: string, message: Message) => {
-    // Update selectedConversation if it matches
-    setSelectedConversation((prev) => {
-      if (!prev || prev.id !== conversationId) return prev
-      const lastMsg = prev.messages[prev.messages.length - 1]
-      // Replace last ASSISTANT message if streaming, otherwise append
-      if (lastMsg && lastMsg.role === 'ASSISTANT' && message.role === 'ASSISTANT') {
-        const newMessages = [...prev.messages]
-        newMessages[newMessages.length - 1] = message
-        return { ...prev, messages: newMessages }
-      } else {
-        return { ...prev, messages: [...prev.messages, message] }
-      }
-    })
-
-    // Update in conversations list
-    setConversations((list) =>
-      list.map((c) => {
-        if (c.id !== conversationId) return c
-        const lastMsg = c.messages[c.messages.length - 1]
+    (conversationId: string, message: Message) => {
+      setSelectedConversation((prev) => {
+        if (!prev || prev.id !== conversationId) return prev
+        const lastMsg = prev.messages[prev.messages.length - 1]
+        // Replace last ASSISTANT message if streaming, otherwise append
         if (lastMsg && lastMsg.role === 'ASSISTANT' && message.role === 'ASSISTANT') {
-          const newMessages = [...c.messages]
+          const newMessages = [...prev.messages]
           newMessages[newMessages.length - 1] = message
-          return { ...c, messages: newMessages }
+          return { ...prev, messages: newMessages }
         } else {
-          return { ...c, messages: [...c.messages, message] }
+          return { ...prev, messages: [...prev.messages, message] }
         }
       })
-    )
-  },
-  []
-)
+      // Update in conversations list
+      setConversations((list) =>
+        list.map((c) => {
+          if (c.id !== conversationId) return c
+          const lastMsg = c.messages[c.messages.length - 1]
+          if (lastMsg && lastMsg.role === 'ASSISTANT' && message.role === 'ASSISTANT') {
+            const newMessages = [...c.messages]
+            newMessages[newMessages.length - 1] = message
+            return { ...c, messages: newMessages }
+          } else {
+            return { ...c, messages: [...c.messages, message] }
+          }
+        })
+      )
+    },
+    []
+  )
 
-
-  // -------- Remove a conversation helper --------
+  // ---- Remove a conversation helper ----
   const removeConversation = useCallback(
     (conversationId: string) => {
-      // Remove from list
       setConversations((list) =>
         list.filter((c) => c.id !== conversationId)
       )
-      // Clear selection if it was the one removed
       setSelectedConversation((sel) =>
         sel?.id === conversationId ? null : sel
       )
@@ -119,9 +112,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     []
   )
 
-  // -------- Create a new chat ----------
+  // ---- Create a new chat ----
   const createNewConversation = useCallback(
-    async (): Promise<Conversation | null> => {
+    async (opts?: { title?: string }): Promise<Conversation | null> => {
       if (!user) {
         toast('Please login to create a conversation')
         return null
@@ -133,7 +126,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: `Chat ${new Date().toLocaleString()}`,
+            title: opts?.title || `Chat ${new Date().toLocaleString()}`,
           }),
         })
         const data: ApiResponse<Conversation> = await res.json()
@@ -165,7 +158,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     [user]
   )
 
-  // -------- Fetch all user chats ----------
+  // ---- Fetch all user chats ----
   const fetchUsersConversations = useCallback(async () => {
     if (!user) {
       setConversations([])

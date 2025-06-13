@@ -1,383 +1,427 @@
-'use client'
+// components/PromptBox.tsx
+"use client";
 
-import Image from 'next/image'
-import assets from '@/app/assets/assets'
-import UploadModal from './UploadModal'
-import React, { useState, useCallback, FormEvent } from 'react'
-import { useAppContext } from '@/contexts/AppContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { toast } from 'sonner'
-import { Paperclip } from "lucide-react"
+import assets from "../app/assets/assets";
+import Image from "next/image";
+import UploadModal from './UploadModal'; // importe ton modal
+import React, {
+  useState,
+  useCallback,
+  FormEvent,
+  useRef,
+  useEffect
+} from "react";
+import { useAppContext } from "../contexts/AppContext"; // Assurez-vous que le contexte est importé correctement
+import toast from "react-hot-toast";
+import { conversationHasDocuments } from "@/lib/utils/files";
+
 
 interface PromptBoxProps {
-  setIsLoading: (loading: boolean) => void
-  isLoading: boolean
+  setIsLoading: (loading: boolean) => void;
+  isLoading: boolean;
 }
 
 interface Message {
-  role: 'USER' | 'ASSISTANT'
-  content: string
-  timestamp: number
-  createdAt?: string
+  role: "USER" | "ASSISTANT";
+  content: string;
+  timestamp: number;
 }
 
-type Mode = 'rag' | 'search' | 'planning'
+type Mode = "rag" | "search" | "planning";
 
-const PromptBox: React.FC<PromptBoxProps> = ({ setIsLoading, isLoading }) => {
-  const [prompt, setPrompt] = useState('')
-  const [mode, setMode] = useState<Mode>('search')
-  const [showModal, setShowModal] = useState(false)
-  const [hasFiles, setHasFiles] = useState(false)
-  const [uploading, setUploading] = useState(false)
+const PromptBox: React.FC<PromptBoxProps> = ({
+  setIsLoading,
+  isLoading,
+}) => {
+  const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<Mode>("search"); // default mode
+  const [showModal, setShowModal] = useState(false);
+  const [hasFiles, setHasFiles] = useState(false);
 
-
-  const { user } = useAuth()
   const {
+    userId,
+    setConversations,
     selectedConversation,
+    setSelectedConversation,
     createNewConversation,
-    appendMessage,
-  } = useAppContext()
+  } = useAppContext();
+  
+  
+  useEffect(() => {
+    const checkDocs = async () => {
+      if (selectedConversation) {
+        const hasDocs = await conversationHasDocuments(selectedConversation.id);
+        setHasFiles(hasDocs);
+      }
+    };
+    checkDocs();
+  }, [selectedConversation]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      onSubmit(e)
+  const handleKeyDown = (event:React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      onSubmit(event);
     }
-  }
+  };
 
-  // File upload handler
-  const handleFilesUpload = async (files: File[]) => {
-    if (!user || !selectedConversation) {
-      toast.error('Veuillez sélectionner une conversation et vous connecter.')
-      return
+
+  // 1️⃣ File upload & vectorization
+  const handleFilesUpload = async (files: File[]): Promise<void> => {
+    if (!userId || !selectedConversation) {
+      toast.error("Veuillez sélectionner une conversation et vous connecter d'abord.");
+      return;
     }
 
     const formData = new FormData()
-    files.forEach((file) => formData.append('file', file))
-    formData.append('conversationId', selectedConversation.id)
-    formData.append('userId', user.id)
+    files.forEach((file) => formData.append("file", file))
+    formData.append("conversationId", selectedConversation.id)
+    formData.append("userId", userId)
 
     try {
-      const res = await fetch('/api/chat/vectorize', {
-        method: 'POST',
+      const res = await fetch("/api/chat/vectorize", {
+        method: "POST",
         body: formData,
-      })
-      const data = await res.json()
+      });
 
       if (res.ok) {
+        // Analyse la réponse pour détecter si le document existe déjà
+        const data = await res.json();
+        
         if (data.alreadyExists) {
-          toast.error('Document déjà présent')
+          toast.error("Document déjà présent");
         } else {
-          toast.success('Fichiers embeddés avec succès !')
+          toast.success("Fichiers embeddés avec succès !");
         }
-        setShowModal(false)
-        setHasFiles(true)
-        setMode('rag')
+        
+        setShowModal(false);
+        setHasFiles(true);          // ← Indique qu'on a des fichiers
+        setMode("rag");             // ← Active automatiquement le mode RAG
       } else {
-        toast.error(`Erreur pendant l'embedding : ${data.error || res.status}`)
+        const err = await res.json();
+        toast.error(`Erreur pendant l'embedding : ${err.error}`);
       }
     } catch (error) {
-      console.error('Erreur lors de l\'upload:', error)
-      toast.error('Une erreur est survenue lors de l\'upload')
+      console.error("Erreur lors de l'upload:", error);
+      toast.error("Une erreur est survenue lors de l'upload");
     }
   }
-
-  // Site document import handler
-  const handleImportDocument = async (doc: { id: string; name: string }) => {
-    if (!user || !selectedConversation) {
-      toast.error('Veuillez sélectionner une conversation et vous connecter.')
-      return
-    }
-
-    try {
-      const res = await fetch('/api/docs/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: doc.id,
-          conversationId: selectedConversation.id,
-          userId: user.id,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success('Document importé et embeddé !')
-        setHasFiles(true)
-        setMode('rag')
-        setShowModal(false)
-      } else {
-        toast.error(`Erreur pendant l'import : ${data.error || res.status}`)
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'import:', error)
-      toast.error('Une erreur est survenue lors de l\'import')
-    }
-  }
-
-  // PLANNING API response structure
+  
+  // 2️⃣ Chat / RAG submit
   interface PlanningTask {
-    task: string
-    description: string
-    duration?: number
+    task: string;
+    description: string;
+    duration?: number;
   }
+
+  const assistantMsgRef = useRef<Message | null>(null);
+  const lastUpdateTime = useRef<number>(Date.now());
 
   const onSubmit = useCallback(
     async (event: FormEvent) => {
-      event.preventDefault()
-      const text = prompt.trim()
-      if (!text) return
-      if (!user) {
-        toast.error('Please login to send a message')
-        return
+      event.preventDefault();
+      const text = prompt.trim();
+
+      if (!text || !userId || isLoading) {
+        if (!text) return;
+        if (!userId) toast.error("Veuillez vous connecter pour envoyer un message");
+        if (isLoading) toast.error("Veuillez patienter...");
+        return;
       }
-      if (isLoading) return
 
-      setPrompt('')
-      setIsLoading(true)
+      setPrompt("");
+      setIsLoading(true);
 
-      // Ensure conversation exists
-      let conv = selectedConversation
-      if (!conv) {
-        const newConv = await createNewConversation()
-        if (!newConv) {
-          setIsLoading(false)
-          return
-        }
-        conv = newConv
+      if (!selectedConversation) {
+        // 💡 Correction ICI : appel correct avec object
+        await createNewConversation({ title: text });
+        setIsLoading(false);
+        return;
       }
-      const convId = conv.id
 
-      // Optimistic add of user message
       const userMsg: Message = {
-        role: 'USER',
+        role: "USER",
         content: text,
         timestamp: Date.now(),
-      }
-      appendMessage(convId, userMsg)
+      };
+
+      // Optimistic update
+      setSelectedConversation((prev) => ({
+        ...prev!,
+        messages: [...prev!.messages, userMsg],
+      }));
+
+      setConversations((list) =>
+        list.map((c) =>
+          c.id === selectedConversation.id
+            ? { ...c, messages: [...c.messages, userMsg] }
+            : c
+        )
+      );
 
       try {
-        // --- PLANNING MODE ---
-        if (mode === 'planning') {
-          const planningRes = await fetch('/api/planning/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        // ✅ PLANNING MODE
+        if (mode === "planning") {
+          const planningRes = await fetch("/api/planning/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               sectionText: text,
-              projectId: convId,
-              createdBy: user.id,
+              projectId: selectedConversation.id,
+              createdBy: userId,
             }),
-          })
+          });
 
-          if (!planningRes.ok) throw new Error('Planning failed')
+          if (!planningRes.ok) throw new Error("Échec de génération du planning");
 
-          const planningData = await planningRes.json()
+          const planningData = await planningRes.json();
 
-          const assistantResponse = `🛠️ **AI Planning Assistant**
+          const assistantResponse = `🛠️ **Assistant IA de planification**
 
-          ### 🧱 Work Breakdown Structure:
-          ${planningData.partialWBS
-            .map(
-              (task: PlanningTask) =>
-                `- **${task.task}** (${task.description}) – _${task.duration ?? '???'} days_`
-            )
-            .join('\n')}
+  ### 🧱 Structure de répartition du travail :
+  ${planningData.partialWBS
+    .map(
+      (task: PlanningTask) =>
+        `**${task.task}** (${task.description}) _${task.duration ?? "???"} jours_`
+    )
+    .join("\n")}
 
-          ${
-            planningData.missingFields.length > 0
-              ? `\n### ❓ Missing Information:\n` +
-                planningData.missingFields.map((f: { question: string }) => `• ${f.question}`).join('\n')
-              : '\n✅ No missing information!'
-          }
-          `
+  ${
+    planningData.missingFields.length > 0
+      ? `\n### ❓ Informations manquantes :\n` +
+      planningData.missingFields.map((f: { question: string }) => `• ${f.question}`).join("\n")
+        : "\n✅ Aucune information manquante !"
+  }
+  `;
+
           const assistantMsg: Message = {
-            role: 'ASSISTANT',
+            role: "ASSISTANT",
             content: assistantResponse,
             timestamp: Date.now(),
-          }
-          appendMessage(convId, assistantMsg)
-          setIsLoading(false)
-          return
+          };
+
+          setSelectedConversation((prev) => ({
+            ...prev!,
+            messages: [...prev!.messages, assistantMsg],
+          }));
+
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === selectedConversation.id
+                ? { ...c, messages: [...c.messages, assistantMsg] }
+                : c
+            )
+          );
+
+          return; // ✅ Done with planning
         }
 
-        // --- RAG or SEARCH mode (streaming) ---
-        const res = await fetch('/api/chat/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        // ✅ RAG or SEARCH (streaming)
+        const res = await fetch("/api/chat/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            conversationId: convId,
+            conversationId: selectedConversation.id,
             mode,
-            messages: [...conv.messages, userMsg],
+            messages: [...selectedConversation.messages, userMsg],
           }),
-        })
+        });
 
-        if (!res.ok || !res.body) throw new Error('Chat failed')
+        if (!res.ok) throw new Error("Échec de la recherche IA");
 
         const assistantMsg: Message = {
-          role: 'ASSISTANT',
-          content: '',
+          role: "ASSISTANT",
+          content: "",
           timestamp: Date.now(),
-        }
-        appendMessage(convId, assistantMsg)
+        };
 
-        // Streaming: update as tokens come
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let done = false
+        setSelectedConversation((prev) => ({
+          ...prev!,
+          messages: [...prev!.messages, assistantMsg],
+        }));
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        assistantMsgRef.current = {
+          role: "ASSISTANT",
+          content: "",
+          timestamp: Date.now(),
+        };
 
         while (!done) {
-          const { value, done: readerDone } = await reader.read()
-          done = readerDone
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
           if (value) {
-            const chunk = decoder.decode(value)
-            assistantMsg.content += chunk
-            // Replace last assistant message with updated content
-            appendMessage(convId, { ...assistantMsg })
+            const chunk = decoder.decode(value);
+            assistantMsgRef.current!.content += chunk;
+
+            // Évite les updates trop fréquents (ex. : toutes les 300ms)
+            if (Date.now() - lastUpdateTime.current > 300) {
+              lastUpdateTime.current = Date.now();
+
+              setSelectedConversation((prev) => ({
+                ...prev!,
+                messages: [
+                  ...prev!.messages.slice(0, -1),
+                  { ...assistantMsgRef.current! },
+                ],
+              }));
+            }
           }
         }
-      } catch (err: any) {
-        console.error(err)
-        toast.error('Failed to get response')
+
+        // Final flush après streaming
+        setSelectedConversation((prev) => ({
+          ...prev!,
+          messages: [
+            ...prev!.messages.slice(0, -1),
+            { ...assistantMsgRef.current! },
+          ],
+        }));
+
+      } catch (err) {
+        console.error(err);
+        toast.error("Échec de la réponse !");
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     },
     [
       prompt,
-      user,
+      userId,
       isLoading,
       selectedConversation,
       createNewConversation,
-      appendMessage,
-      setIsLoading,
+      setConversations,
+      setSelectedConversation,
       mode,
+      setIsLoading,
     ]
-  )
+  );
+
 
   return (
     <form
       onSubmit={onSubmit}
-      className={`
-        w-full 
-        ${selectedConversation?.messages.length ? 'max-w-3xl' : 'max-w-2xl'}
-        bg-gray-100 dark:bg-[#404045] p-4 rounded-3xl mt-4 transition-all
-        border border-gray-200 dark:border-[#2d2f33]
-      `}
+      className={`w-full ${
+        selectedConversation?.messages?.length && selectedConversation.messages.length > 0
+          ? "max-w-3xl"
+          : "max-w-2xl"
+      } bg-[#404045] p-4 rounded-3xl mt-4 transition-all`}
     >
       <textarea
         value={prompt}
-        onChange={e => setPrompt(e.target.value)}
+        onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="
-          outline-none w-full resize-none overflow-hidden break-words 
-          bg-transparent text-gray-900 dark:text-white
-          placeholder:text-gray-500 dark:placeholder:text-gray-400
-        "
+        className="outline-none w-full resize-none overflow-hidden break-words bg-transparent"
         rows={2}
-        placeholder="Message AI..."
-        disabled={isLoading}
+        placeholder="Message IA..."
       />
 
-<div className="flex items-center justify-between text-sm mt-2">
-  {/* Mode selection (left) */}
-  <div className="flex items-center gap-2">
-    <p
-      onClick={() => hasFiles && setMode('rag')}
-      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-        ${mode === 'rag'
-          ? 'bg-blue-600 text-white border-blue-600'
-          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-        } ${!hasFiles && 'opacity-50 cursor-not-allowed'}`}
-      title={!hasFiles ? 'Upload or import a document to enable RAG mode' : ''}
-    >
-      <Image src={assets.deepseek} alt="DeepThink" width={16} height={16} />
-      DeepThink (RAG)
-    </p>
-    <p
-      onClick={() => setMode('search')}
-      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-        ${mode === 'search'
-          ? 'bg-blue-600 text-white border-blue-600'
-          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-        }`}
-    >
-      <Image src={assets.web_search} alt="Search" width={16} height={16} />
-      Search
-    </p>
-    <p
-      onClick={() => setMode('planning')}
-      className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition 
-        ${mode === 'planning'
-          ? 'bg-blue-600 text-white border-blue-600'
-          : 'border-gray-300/40 hover:bg-gray-300/30 dark:hover:bg-gray-500/20 dark:border-gray-600/40 text-gray-700 dark:text-gray-200'
-        }`}
-    >
-      <Image src={assets.calendar} alt="Planning" width={16} height={16} />
-      Planning
-    </p>
-  </div>
+      <div className="flex items-center justify-between text-sm mt-2">
+        <div className="flex items-center gap-2">
+          <p
+            onClick={() => {
+              if (!hasFiles) {
+                toast.error("Ajoutez un document avant d'activer le mode RAG.");
+                return;
+              }
+              setMode("rag");
+            }}
+            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition ${
+              mode === "rag"
+                ? "bg-blue-600 text-white"
+                : hasFiles
+                  ? "border-gray-300/40 hover:bg-gray-500/20"
+                  : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            <Image
+              src={assets.deepseek}
+              alt="DeepThink"
+              width={16}
+              height={16}
+            />
+            DeepThink (RAG)
+          </p>
+          <p
+            onClick={() => setMode("search")}
+            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition ${
+              mode === "search"
+                ? "bg-blue-600 text-white"
+                : "border-gray-300/40 hover:bg-gray-500/20"
+            }`}
+          >
+            <Image
+              src={assets.web_search}
+              alt="Search"
+              width={16}
+              height={16}
+            />
+            Recherche
+          </p>
+          <p
+            onClick={() => setMode("planning")}
+            className={`flex items-center gap-2 text-xs border px-2 py-1 rounded-full cursor-pointer transition ${
+              mode === "planning"
+                ? "bg-blue-600 text-white"
+                : "border-gray-300/40 hover:bg-gray-500/20"
+            }`}
+          >
+            <Image
+              src={assets.calendar} // or use a new icon
+              alt="Planning"
+              width={16}
+              height={16}
+            />
+            Planning
+          </p>
+        </div>
 
-  {/* Upload and Send (right) */}
-  <div className="flex items-center gap-2">
-    <button
-      type="button"
-      onClick={() => setShowModal(true)}
-      className="
-        flex items-center justify-center w-9 h-9 rounded-full
-        bg-gray-200 hover:bg-blue-100 dark:bg-blue-600 dark:hover:bg-blue-500
-        transition
-        focus:outline-none focus:ring-2 focus:ring-blue-400
-        shadow
-      "
-      title="Ajouter un document"
-    >
-      <Paperclip className="w-5 h-5 text-blue-600 dark:text-white" />
-    </button>
-    {/* UploadModal */}
-    <UploadModal
-      isOpen={showModal}
-      onClose={() => setShowModal(false)}
-      userId={user?.id || ''}
-      loading={uploading}
-      onUpload={async (files) => {
-        setUploading(true);
-        try {
-          await handleFilesUpload(files);
-        } finally {
-          setUploading(false);
-        }
-      }}
-      onImportDocument={async (doc) => {
-        setUploading(true);
-        try {
-          await handleImportDocument(doc);
-        } finally {
-          setUploading(false);
-        }
-      }}
-    />
-    <button
-      type="submit"
-      disabled={!prompt || isLoading}
-      className={`
-        w-9 h-9 flex items-center justify-center rounded-full
-        bg-gray-400 dark:bg-[#71717a] text-white transition
-        ${prompt ? 'bg-blue-500 hover:bg-blue-600' : 'cursor-not-allowed'}
-      `}
-      title="Envoyer"
-    >
-      <Image
-        className="w-4 h-4"
-        src={assets.up_arrow}
-        alt="Send"
-        width={16}
-        height={16}
-      />
-    </button>
-  </div>
-</div>
+        <div className="flex items-center gap-2">
+          {/* PDF/XLSX upload */}
+            <div
+              className="flex items-center gap-3 hover:bg-white/10 px-3 py-2 rounded-lg cursor-pointer"
+              onClick={() => setShowModal(true)}
+            >
+                <Image
+                    className="w-5 h-5 cursor-pointer"
+                    src={assets.pin_doc}
+                    alt="Upload"
+                />
+            </div>
 
+            <UploadModal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                onUpload={handleFilesUpload}
+            />
+
+            {hasFiles && (
+                <span className="text-green-400 text-xs ml-2">
+                  📎 Document attaché
+                </span>
+              )}
+
+          <button
+            type="submit"
+            disabled={!prompt || isLoading}
+            className={`rounded-full p-2 ${
+              prompt ? "bg-blue-500" : "bg-[#71717a]"
+            } transition`}
+          >
+            <Image
+              className="w-3.5 aspect-square"
+              src={assets.up_arrow}
+              alt="Envoyer"
+              width={14}
+              height={14}
+            />
+          </button>
+        </div>
+      </div>
     </form>
-  )
-}
+  );
+};
 
-export default PromptBox
+export default PromptBox;

@@ -1,7 +1,7 @@
 // lib/actions/messages.ts
 import { prisma } from '@/lib/prisma';
 import { ChatRole, Conversation, Message as PrismaMessage } from '@prisma/client';
-import { MessageMetadata } from '@/types/index';
+import { MessageMetadata } from '@/types';
 
 /**
  * Crée un nouveau message (utilisateur ou assistant) dans la base.

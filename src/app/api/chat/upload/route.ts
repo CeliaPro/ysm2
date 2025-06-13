@@ -4,10 +4,14 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { withAuthentication } from "@/app/utils/auth.utils";
-import { uploadDocumentFile } from "@/lib/astra/upload"; // or your own
+import { uploadDocumentFile } from "@/lib/astra/upload";
 import { addMessageToConversation } from "@/lib/actions/conversations/conversation";
 import { ChatRole } from "@prisma/client";
 import { logActivity } from "@/app/utils/logActivity";
+
+export const config = {
+  api: { bodyParser: false },
+};
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
   // Parse multipart/form-data
@@ -20,20 +24,20 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       userId: user.id,
       action: "CHAT_UPLOAD",
       status: "FAILURE",
-      description: "No files provided",
+      description: "Aucun fichier fourni",
       req,
     });
-    return NextResponse.json({ success: false, error: "Aucun fichier fourni" }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Aucun fichier fourni." }, { status: 400 });
   }
   if (!conversationId) {
     await logActivity({
       userId: user.id,
       action: "CHAT_UPLOAD",
       status: "FAILURE",
-      description: "Missing conversationId",
+      description: "conversationId manquant",
       req,
     });
-    return NextResponse.json({ success: false, error: "conversationId manquant" }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Identifiant de conversation manquant." }, { status: 400 });
   }
 
   // Ensure temp dir exists
@@ -95,7 +99,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       userId: user.id,
       action: "CHAT_UPLOAD",
       status: "SUCCESS",
-      description: `Uploaded and embedded file ${file.name} in conversation ${conversationId}`,
+      description: `Fichier ${file.name} uploadé et indexé dans la conversation ${conversationId}`,
       req,
     });
   }

@@ -1,22 +1,21 @@
+// app/api/planning/generate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getPlanningCollection,
   ensurePlanningCollection,
   PlanningTask,
-  MissingField
+  MissingField,
 } from '@/lib/astra/planning';
 import { OpenAI } from 'openai';
 import { addMessageToConversation } from "@/lib/actions/conversations/conversation";
 import { withAuthentication } from '@/app/utils/auth.utils';
-// import { logActivity } from '@/app/utils/logActivity';
 
-// Initialize OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export async function GET() {
-  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
+  return NextResponse.json({ error: "Méthode non autorisée" }, { status: 405 });
 }
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
@@ -24,17 +23,16 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
     const { sectionText, projectId } = await req.json();
 
     if (typeof sectionText !== 'string' || !sectionText.trim()) {
-      return NextResponse.json({ error: 'sectionText is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Le texte de la section est requis.' }, { status: 400 });
     }
     if (typeof projectId !== 'string' || !projectId.trim()) {
-      return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'L\'identifiant du projet est requis.' }, { status: 400 });
     }
 
-    // 1) Ensure the Astra collection exists
     await ensurePlanningCollection();
     const collection = getPlanningCollection();
 
-    // 2) Build the GPT prompt
+    // GPT Prompt
     const systemPrompt = `
 Vous êtes un assistant expert en planification de projet.
 
@@ -65,7 +63,7 @@ Specification Section:
 """${sectionText}"""
 `;
 
-    // 3) Run GPT-4o
+    // Run GPT-4o
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.3,
@@ -77,21 +75,20 @@ Specification Section:
 
     const raw = completion.choices[0].message?.content;
     if (!raw) {
-      return NextResponse.json({ error: 'Aucun contenu généré par le LLM' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Aucun contenu généré par le LLM.' }, { status: 500 });
     }
 
-    // 4) Parse JSON into { partialWBS, missingFields }
+    // Parse JSON from the model response
     let parsed: {
       partialWBS: PlanningTask[];
       missingFields: MissingField[];
     };
     try {
-      // 🧼 Clean GPT response to remove Markdown formatting
       const cleanJson = raw
         .trim()
-        .replace(/^```json\s*/i, "")  // Remove ```json if present at the start
-        .replace(/^```/, "")          // Remove ``` if it's alone at start
-        .replace(/```$/, "")          // Remove ending ```
+        .replace(/^```json\s*/i, "")
+        .replace(/^```/, "")
+        .replace(/```$/, "")
         .trim();
 
       parsed = JSON.parse(cleanJson);
@@ -100,17 +97,17 @@ Specification Section:
         !Array.isArray(parsed.partialWBS) ||
         !Array.isArray(parsed.missingFields)
       ) {
-        throw new Error("Invalid format");
+        throw new Error("Format JSON renvoyé invalide.");
       }
     } catch (err) {
-      console.error("Error parsing LLM JSON:", err);
+      console.error("Erreur lors du parsing du JSON généré par le LLM:", err);
       return NextResponse.json(
-        { error: "Could not parse structured WBS from LLM output" },
+        { success: false, error: "Impossible d'analyser le JSON structuré de la réponse IA." },
         { status: 500 }
       );
     }
 
-    // 5) Insert into Astra
+    // Insert planning doc in Astra
     const document = {
       projectId,
       sourceSection: sectionText,
@@ -124,7 +121,7 @@ Specification Section:
     const insertResult = await collection.insertOne(document) as unknown;
     const planningId = (insertResult as { documentId: string }).documentId;
 
-    // 6) Save messages to DB (for traceability)
+    // Log user message
     await addMessageToConversation({
       conversationId: projectId,
       userId: user.id,
@@ -136,25 +133,23 @@ Specification Section:
       },
     });
 
-    // 💬 Format assistant response (Markdown)
-    const assistantContent = `🛠️ **AI Planning Assistant**
-
-🧱 Structure de découpage du travail :
-${parsed.partialWBS
-      .map(
+    // Format assistant response (Markdown for UI)
+    const assistantContent = [
+      "🛠️ **AI Planning Assistant**",
+      "",
+      "### 🧱 Structure de découpage du travail :",
+      ...parsed.partialWBS.map(
         (t) =>
-          `**${t.task}** (${t.description}) – _${t.duration ?? "???"} jours_`
-      )
-      .join("\n")}
-
-${
+          `- **${t.task}** (${t.description}) – _${t.duration ?? "???"} jours_`
+      ),
+      "",
       parsed.missingFields.length > 0
-        ? `\n❓ Informations manquantes :\n${parsed.missingFields
-            .map((f) => `• ${f.question}`)
-            .join("\n")}`
-        : "\n✅ Aucune information manquante !"
-    }
-`;
+        ? [
+            "### ❓ Informations manquantes :",
+            ...parsed.missingFields.map((f) => `• ${f.question}`)
+          ].join("\n")
+        : "✅ Aucune information manquante !"
+    ].join("\n");
 
     await addMessageToConversation({
       conversationId: projectId,
@@ -168,8 +163,9 @@ ${
       },
     });
 
-    // ✅ Return to frontend
+    // Return results
     return NextResponse.json({
+      success: true,
       planningId,
       partialWBS: parsed.partialWBS,
       missingFields: parsed.missingFields,
@@ -177,9 +173,9 @@ ${
     });
 
   } catch (error: any) {
-    console.error('Unexpected error in /api/planning/generate:', error);
+    console.error('Erreur inattendue dans /api/planning/generate:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal error' },
+      { success: false, error: error.message || 'Erreur interne du serveur.' },
       { status: 500 }
     );
   }

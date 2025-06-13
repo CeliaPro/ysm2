@@ -1,18 +1,17 @@
 // app/api/chat/create/route.ts
-import { NextResponse, NextRequest } from 'next/server'
-import { createConversation } from '@/lib/actions/conversations/conversation'
-import { withAuthentication } from '@/app/utils/auth.utils'
-import { logActivity } from '@/app/utils/logActivity'
+import { NextResponse, NextRequest } from 'next/server';
+import { createConversation } from '@/lib/actions/conversations/conversation';
+import { withAuthentication } from '@/app/utils/auth.utils';
+import { logActivity } from '@/app/utils/logActivity';
 
 export const POST = withAuthentication(async (req: NextRequest, user) => {
-  // Get sessionId from cookies
-  const sessionId = req.cookies?.get('sessionId')?.value
+  const sessionId = req.cookies?.get('sessionId')?.value;
 
   try {
-    const body = await req.json()
-    const { title } = body
+    const body = await req.json();
+    const { title } = body;
 
-    // Basic validation
+    // Validation
     if (!title || typeof title !== 'string') {
       await logActivity({
         userId: user.id,
@@ -21,18 +20,18 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         description: 'Attempted to create conversation without valid title',
         req,
         sessionId,
-      })
+      });
       return NextResponse.json(
-        { success: false, message: 'Title is required and must be a string' },
+        { success: false, message: 'Le titre est requis et doit être une chaîne de caractères.' },
         { status: 400 }
-      )
+      );
     }
 
-    // Create the conversation with the authenticated user ID
+    // Create conversation
     const conversationData = await createConversation({
       userId: user.id,
       title,
-    })
+    });
 
     await logActivity({
       userId: user.id,
@@ -41,13 +40,13 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       description: `Created conversation with title: "${title}"`,
       req,
       sessionId,
-    })
+    });
 
-    // Add a welcome message in the response (not saved to DB)
+    // Build response (welcome message in French)
     const responseData = {
       ...conversationData,
-      welcomeMessage: 'Welcome to your new conversation!',
-    }
+      welcomeMessage: 'Bienvenue dans votre nouvelle conversation !',
+    };
 
     return NextResponse.json(
       {
@@ -55,7 +54,7 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
         data: responseData,
       },
       { status: 201 }
-    )
+    );
   } catch (error: any) {
     await logActivity({
       userId: user.id,
@@ -64,11 +63,11 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
       description: `Error creating conversation: ${error.message}`,
       req,
       sessionId,
-    })
-    console.error('Error in /api/chat/create:', error)
+    });
+    console.error('Error in /api/chat/create:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal Server Error' },
+      { error: error.message || 'Erreur interne du serveur' },
       { status: 500 }
-    )
+    );
   }
-}, 'EMPLOYEE')
+}, 'EMPLOYEE');
