@@ -34,7 +34,7 @@ export async function ensureCollection() {
     await db.createCollection(process.env.ASTRA_DB_COLLECTION!, {
       vector: { 
         dimension: 1536, 
-        metric: "dot_product" 
+        metric: "cosine" 
       },
     });
     console.log("✅ Collection ready");

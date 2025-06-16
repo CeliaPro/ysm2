@@ -3,7 +3,6 @@ import { getCollection, ensureCollection } from '@/lib/astra/client';
 import { OpenAI } from 'openai';
 import { diffWords } from 'diff';
 
-
 /**
  * Configuration pour l'API OpenAI
  */
@@ -77,40 +76,63 @@ export interface ComparisonResult {
   };
 }
 
-/**
- * Options avancées pour la comparaison de documents
- */
 export interface AdvancedCompareOptions {
-  // Seuils de similarité
-  semanticSimilarityThreshold?: number; // Seuil pour considérer identique
-  lexicalSimilarityThreshold?: number;  // Seuil pour considérer modifié
-  
-  // Options avancées
-  useLLM?: boolean;                     // Utiliser l'IA pour affiner les résultats
-  llmConfidenceThreshold?: number;      // Seuil de confiance LLM pour réviser des classifications
-  enhanceModifiedChunks?: boolean;      // Générer des diff highlights pour les chunks modifiés
-  computeConfidenceScores?: boolean;    // Calculer des scores de confiance pour chaque détection
-  
-  // Algorithmes à utiliser (pipeline hybride)
-  useVectorSimilarity?: boolean;        // Utiliser similarité vectorielle (par défaut: true)
-  useExactMatching?: boolean;           // Utiliser correspondance exacte (par défaut: true)
-  useLexicalSimilarity?: boolean;       // Utiliser similarité lexicale (par défaut: true)
-  
-  // Limite des opérations LLM (pour contrôler les coûts)
-  maxLLMOps?: number;                   // Limiter le nombre d'appels au LLM
+  semanticSimilarityThreshold?: number;
+  lexicalSimilarityThreshold?: number;
+  useLLM?: boolean;
+  llmConfidenceThreshold?: number;
+  enhanceModifiedChunks?: boolean;
+  computeConfidenceScores?: boolean;
+  useVectorSimilarity?: boolean;
+  useExactMatching?: boolean;
+  useLexicalSimilarity?: boolean;
+  maxLLMOps?: number;
+  batchSize?: number;
 }
+
+// Cache global pour les calculs coûteux
+interface SimilarityCache {
+  vector: Map<string, number>;
+  lexical: Map<string, number>;
+  tokenized: Map<string, Set<string>>;
+}
+
+const globalCache: SimilarityCache = {
+  vector: new Map(),
+  lexical: new Map(),
+  tokenized: new Map(),
+};
 
 /**
  * Convertit un document Astra en chunk pour la comparaison
  */
-function convertToAstraChunk(doc: AstraDoc): AstraChunk | null {
-  if (!doc.metadata.processingId || !doc.$vector) {
-    console.warn(`[Skip] Invalid chunk ${doc._id}: missing vector or processingId`);
+function convertToAstraChunk(doc: { 
+  _id: any;
+  text: string;
+  $vector?: number[];
+  metadata?: {
+    processingId?: string;
+    chunkIndex: number;
+    chunkHash?: string;
+    pageNumber?: number;
+  };
+}): AstraChunk | null {
+  if (!doc.metadata?.processingId || !doc.$vector) {
     return null;
   }
 
+  // Safely convert _id to string, handling null and primitive types
+  let idStr: string;
+  if (doc._id === null || doc._id === undefined) {
+    return null;
+  } else if (typeof doc._id === 'object' && typeof doc._id.toString === 'function') {
+    idStr = doc._id.toString();
+  } else {
+    idStr = String(doc._id);
+  }
+
   return {
-    _id: doc._id,
+    _id: idStr,
     text: doc.text,
     $vector: doc.$vector,
     metadata: {
@@ -123,41 +145,98 @@ function convertToAstraChunk(doc: AstraDoc): AstraChunk | null {
 }
 
 /**
- * Calcule la similarité cosinus entre deux vecteurs
+ * Calcule la similarité cosinus entre deux vecteurs (optimisé)
  */
-function cosineSimilarity(a: unknown, b: unknown): number {
-  // Defensive: only process arrays of equal length
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) return 0;
-  const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-  const magA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
-  const magB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
-  return (magA && magB) ? dot / (magA * magB) : 0;
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length !== b.length) return 0;
+  
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
+  
+  // Une seule boucle pour tous les calculs
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i];
+    const bi = b[i];
+    dot += ai * bi;
+    magA += ai * ai;
+    magB += bi * bi;
+  }
+  
+  const magnitude = Math.sqrt(magA * magB);
+  return magnitude ? dot / magnitude : 0;
 }
 
 /**
- * Calcule la similarité lexicale (Jaccard) entre deux textes
+ * Tokenise un texte avec cache
  */
-function jaccardSimilarity(text1: string, text2: string): number {
-  const tokenize = (text: string): Set<string> => {
-    const tokens = text.toLowerCase()
+function tokenizeWithCache(text: string): Set<string> {
+  if (globalCache.tokenized.has(text)) {
+    return globalCache.tokenized.get(text)!;
+  }
+  
+  const tokens = new Set(
+    text.toLowerCase()
       .replace(/[^\w\s]/g, '')
       .split(/\s+/)
-      .filter(t => t.length > 0);
-    return new Set(tokens);
-  };
+      .filter(t => t.length > 0)
+  );
+  
+  globalCache.tokenized.set(text, tokens);
+  return tokens;
+}
 
-  const set1 = tokenize(text1);
-  const set2 = tokenize(text2);
+/**
+ * Calcule la similarité lexicale (Jaccard) avec cache
+ */
+function jaccardSimilarity(text1: string, text2: string): number {
+  const cacheKey = `${text1.length}:${text2.length}:${text1.slice(0, 50)}`;
   
-  // Calcul de l'intersection
+  if (globalCache.lexical.has(cacheKey)) {
+    return globalCache.lexical.get(cacheKey)!;
+  }
+  
+  const set1 = tokenizeWithCache(text1);
+  const set2 = tokenizeWithCache(text2);
+  
+  // Calcul optimisé de l'intersection
   const intersection = new Set([...set1].filter(x => set2.has(x)));
-  
-  // Calcul de l'union
   const union = new Set([...set1, ...set2]);
   
-  if (union.size === 0) return 1.0; // Deux ensembles vides sont identiques
+  const similarity = union.size === 0 ? 1.0 : intersection.size / union.size;
   
-  return intersection.size / union.size;
+  globalCache.lexical.set(cacheKey, similarity);
+  return similarity;
+}
+
+/**
+ * Pre-filtre les candidats pour réduire l'espace de recherche
+ */
+function preFilterCandidates(
+  query: AstraChunk, 
+  candidates: AstraChunk[],
+  maxCandidates: number = 50
+): AstraChunk[] {
+  // Filtres rapides pour réduire l'espace de recherche
+  const filtered = candidates.filter(candidate => {
+    // Filtre par différence de longueur (textes trop différents)
+    const lengthDiff = Math.abs(query.text.length - candidate.text.length);
+    const maxLengthDiff = Math.max(query.text.length, candidate.text.length) * 0.5;
+    
+    return lengthDiff <= maxLengthDiff;
+  });
+  
+  // Si encore trop de candidats, prendre les plus proches par longueur
+  if (filtered.length > maxCandidates) {
+    return filtered
+      .sort((a, b) => 
+        Math.abs(query.text.length - a.text.length) - 
+        Math.abs(query.text.length - b.text.length)
+      )
+      .slice(0, maxCandidates);
+  }
+  
+  return filtered;
 }
 
 /**
@@ -168,20 +247,13 @@ function calculateConfidenceScore(
   lexicalSimilarity: number,
   exactMatch: boolean
 ): number {
-  // Pondération des différentes métriques
-  const weights = {
-    vector: 0.5,
-    lexical: 0.3,
-    exact: 0.2
-  };
+  const weights = { vector: 0.5, lexical: 0.3, exact: 0.2 };
   
-  // Calcul du score pondéré
   const score = 
     (vectorSimilarity * weights.vector) +
     (lexicalSimilarity * weights.lexical) +
     (exactMatch ? weights.exact : 0);
     
-  // Normalisation entre 0 et 1
   return Math.min(Math.max(score, 0), 1);
 }
 
@@ -195,74 +267,6 @@ function normalize(text: string): string {
 /**
  * Génère un highlight des différences entre deux textes
  */
-// function generateDiffHighlight(text1: string, text2: string): string {
-//   // Version simplifiée - à améliorer avec une bibliothèque de diff
-//   const words1 = text1.split(/\s+/);
-//   const words2 = text2.split(/\s+/);
-  
-//   let result = '';
-//   let i = 0, j = 0;
-  
-//   while (i < words1.length && j < words2.length) {
-//     if (words1[i] === words2[j]) {
-//       result += words1[i] + ' ';
-//       i++;
-//       j++;
-//     } else {
-//       // Recherche d'une correspondance à l'avant
-//       let matchI = -1;
-//       let matchJ = -1;
-      
-//       // Chercher dans une fenêtre
-//       for (let k = 1; k < 4; k++) {
-//         if (i + k < words1.length && words1[i + k] === words2[j]) {
-//           matchI = i + k;
-//           matchJ = j;
-//           break;
-//         }
-//         if (j + k < words2.length && words1[i] === words2[j + k]) {
-//           matchI = i;
-//           matchJ = j + k;
-//           break;
-//         }
-//       }
-      
-//       if (matchI >= 0) {
-//         // Suppression
-//         if (matchI > i) {
-//           result += `<del>${words1.slice(i, matchI).join(' ')}</del> `;
-//           i = matchI;
-//         }
-//         // Ajout
-//         if (matchJ > j) {
-//           result += `<ins>${words2.slice(j, matchJ).join(' ')}</ins> `;
-//           j = matchJ;
-//         }
-//       } else {
-//         // Pas de correspondance trouvée
-//         result += `<del>${words1[i]}</del> `;
-//         result += `<ins>${words2[j]}</ins> `;
-//         i++;
-//         j++;
-//       }
-//     }
-//   }
-  
-//   // Traiter le reste
-//   while (i < words1.length) {
-//     result += `<del>${words1[i]}</del> `;
-//     i++;
-//   }
-  
-//   while (j < words2.length) {
-//     result += `<ins>${words2[j]}</ins> `;
-//     j++;
-//   }
-  
-//   return result.trim();
-// }
-
-
 function generateDiffHighlight(text1: string, text2: string): string {
   const diff = diffWords(text1, text2);
   return diff.map(part => {
@@ -271,7 +275,6 @@ function generateDiffHighlight(text1: string, text2: string): string {
     return part.value;
   }).join('');
 }
-
 
 /**
  * Analyse un chunk modifié avec LLM pour obtenir un avis plus précis
@@ -310,20 +313,17 @@ async function analyzeDiffWithLLM(
     
     const content = response.choices[0]?.message?.content || '';
     
-    // Extraction de la classification et de l'analyse
     const classificationMatch = content.match(/Classification:\s*(unchanged|modified)/i);
     const status = classificationMatch 
       ? (classificationMatch[1].toLowerCase() as 'unchanged' | 'modified') 
       : 'modified';
       
-    // Extraction de l'explication
     const analysisMatch = content.match(/Explication:\s*([\s\S]+)/i);
     const analysis = analysisMatch ? analysisMatch[1].trim() : content;
     
     return { status, analysis };
   } catch (error) {
     console.error('Erreur lors de l\'analyse LLM:', error);
-    // En cas d'erreur, on revient à la classification originale
     return { 
       status: bestMatch.similarity >= 0.9 ? 'unchanged' : 'modified',
       analysis: `Erreur LLM - classification basée sur similarité: ${bestMatch.similarity}`
@@ -332,137 +332,132 @@ async function analyzeDiffWithLLM(
 }
 
 /**
- * Fonction principale de comparaison de documents avec pipeline hybride
+ * Trouve la meilleure correspondance pour un chunk (optimisé)
  */
-export async function compareDocumentChunks(
-  doc1ProcessingId: string,
-  doc2ProcessingId: string,
-  options: AdvancedCompareOptions = {}
-): Promise<ComparisonResult> {
-  if (!doc1ProcessingId || !doc2ProcessingId) {
-    throw new Error('Both processing IDs must be provided.');
-  }
-  
-  // Début du chronomètre pour mesurer la performance
-  const startTime = Date.now();
-  const pipelineSteps: string[] = [];
-  
-  // Configuration des seuils et options par défaut
-  const settings = {
-    thresholds: {
-      unchanged: options.semanticSimilarityThreshold ?? 0.95,
-      modified: options.lexicalSimilarityThreshold ?? 0.7
-    },
+function findBestMatch(
+  chunk: AstraChunk,
+  candidates: AstraChunk[],
+  exactMatchIndex: Map<string, AstraChunk>,
+  settings: {
     algorithms: {
-      useVectorSimilarity: options.useVectorSimilarity ?? true,
-      useExactMatching: options.useExactMatching ?? true,
-      useLexicalSimilarity: options.useLexicalSimilarity ?? true
-    },
+      useVectorSimilarity: boolean;
+      useExactMatching: boolean;
+      useLexicalSimilarity: boolean;
+    };
+    thresholds: {
+      unchanged: number;
+      modified: number;
+    };
     llm: {
-      use: options.useLLM ?? false,
-      confidenceThreshold: options.llmConfidenceThreshold ?? 0.8,
-      maxOperations: options.maxLLMOps ?? 10,
-      enhanceModified: options.enhanceModifiedChunks ?? false
-    },
-    computeConfidence: options.computeConfidenceScores ?? false
-  };
-  
-  pipelineSteps.push('Configuration du pipeline');
-  
-  await ensureCollection();
-  const collection = getCollection();
-  
-  // Préparation de la projection pour la base de données
-  const findOptions = { 
-    projection: { 
-      "$vector": 1 as const, 
-      "text": 1 as const, 
-      "metadata": 1 as const 
-    } 
-  };
-
-  pipelineSteps.push('Requête à la base de données');
-  
-  // Extraction des chunks des documents
-  const [doc1Raw, doc2Raw] = await Promise.all([
-    collection.find({ 'metadata.processingId': doc1ProcessingId }, findOptions).toArray() as Promise<AstraDoc[]>,
-    collection.find({ 'metadata.processingId': doc2ProcessingId }, findOptions).toArray() as Promise<AstraDoc[]>
-  ]);
-
-  // Conversion en chunks Astra avec validation
-  const doc1Chunks = doc1Raw.map(convertToAstraChunk).filter((c): c is AstraChunk => !!c);
-  const doc2Chunks = doc2Raw.map(convertToAstraChunk).filter((c): c is AstraChunk => !!c);
-
-  if (!doc1Chunks.length || !doc2Chunks.length) {
-    throw new Error('One or both documents have no valid chunks with vectors.');
+      enhanceModified: boolean;
+    };
+    computeConfidence: boolean;
   }
+): {
+  chunk: AstraChunk | null;
+  similarity: number;
+  lexicalSimilarity: number;
+  exactMatch: boolean;
+} {
+  // 1. Test de correspondance exacte par hash (O(1))
+  if (settings.algorithms.useExactMatching && chunk.metadata.chunkHash) {
+    const exactMatch = exactMatchIndex.get(chunk.metadata.chunkHash);
+    if (exactMatch) {
+      return {
+        chunk: exactMatch,
+        similarity: 1,
+        lexicalSimilarity: 1,
+        exactMatch: true
+      };
+    }
+  }
+  
+  // 2. Pre-filtrage des candidats pour réduire la complexité
+  const filteredCandidates = preFilterCandidates(chunk, candidates);
+  
+  // 3. Recherche de la meilleure correspondance dans l'espace réduit
+  let bestMatch = {
+    chunk: null as AstraChunk | null,
+    similarity: -1,
+    lexicalSimilarity: 0,
+    exactMatch: false
+  };
+  
+  for (const candidate of filteredCandidates) {
+    let vectorSimilarity = 0;
+    let lexicalSimilarity = 0;
+    
+    // Calcul de similarité vectorielle avec cache
+    if (settings.algorithms.useVectorSimilarity) {
+      const cacheKey = `${chunk._id}:${candidate._id}`;
+      
+      if (globalCache.vector.has(cacheKey)) {
+        vectorSimilarity = globalCache.vector.get(cacheKey)!;
+      } else {
+        vectorSimilarity = cosineSimilarity(chunk.$vector, candidate.$vector);
+        globalCache.vector.set(cacheKey, vectorSimilarity);
+      }
+    }
+    
+    // Calcul de similarité lexicale avec cache
+    if (settings.algorithms.useLexicalSimilarity) {
+      lexicalSimilarity = jaccardSimilarity(chunk.text, candidate.text);
+    }
+    
+    // Combinaison des métriques
+    const combinedSimilarity = settings.algorithms.useVectorSimilarity && settings.algorithms.useLexicalSimilarity
+      ? (vectorSimilarity * 0.7) + (lexicalSimilarity * 0.3)
+      : settings.algorithms.useVectorSimilarity
+        ? vectorSimilarity
+        : lexicalSimilarity;
+    
+    if (combinedSimilarity > bestMatch.similarity) {
+      bestMatch = {
+        chunk: candidate,
+        similarity: combinedSimilarity,
+        lexicalSimilarity,
+        exactMatch: false
+      };
+    }
+  }
+  
+  return bestMatch;
+}
 
-  pipelineSteps.push('Traitement des chunks');
-  console.log(`[Chunks] Found ${doc1Chunks.length} chunks for doc1`);
-  console.log(`[Chunks] Found ${doc2Chunks.length} chunks for doc2`);
-
-  // Containers pour les résultats
-  const added: ComparedChunk[] = [];
-  const removed: ComparedChunk[] = [];
+/**
+ * Traite un batch de chunks
+ */
+async function processBatch(
+  chunks: AstraChunk[],
+  doc2Chunks: AstraChunk[],
+  exactMatchIndex: Map<string, AstraChunk>,
+  settings: {
+    algorithms: {
+      useVectorSimilarity: boolean;
+      useExactMatching: boolean;
+      useLexicalSimilarity: boolean;
+    };
+    thresholds: {
+      unchanged: number;
+      modified: number;
+    };
+    llm: {
+      enhanceModified: boolean;
+    };
+    computeConfidence: boolean;
+  }
+): Promise<{
+  unchanged: ComparedChunk[];
+  modified: ComparedChunk[];
+  removed: ComparedChunk[];
+}> {
   const unchanged: ComparedChunk[] = [];
   const modified: ComparedChunk[] = [];
+  const removed: ComparedChunk[] = [];
   
-  // Cache pour les calculs de similarité
-  const similarityCache = new Map<string, number>();
-  
-  // Pour chaque chunk du premier document
-  for (const chunk of doc1Chunks) {
-    // Recherche du meilleur match
-    const bestMatch = doc2Chunks.reduce((best, other) => {
-      // 1. Test d'identité exacte par hash si disponible
-      if (settings.algorithms.useExactMatching && 
-          chunk.metadata.chunkHash && 
-          other.metadata.chunkHash &&
-          chunk.metadata.chunkHash === other.metadata.chunkHash) {
-        return { chunk: other, similarity: 1, lexicalSimilarity: 1, exactMatch: true };
-      }
-      
-      // 2. Calcul de similarité vectorielle si activé
-      let vectorSimilarity = 0;
-      if (settings.algorithms.useVectorSimilarity) {
-        const cacheKey = `${chunk._id}:${other._id}`;
-        if (similarityCache.has(cacheKey)) {
-          vectorSimilarity = similarityCache.get(cacheKey)!;
-        } else {
-          vectorSimilarity = cosineSimilarity(chunk.$vector, other.$vector);
-          similarityCache.set(cacheKey, vectorSimilarity);
-        }
-      }
-      
-      // 3. Calcul de similarité lexicale si activé
-      let lexicalSimilarity = 0;
-      if (settings.algorithms.useLexicalSimilarity) {
-        lexicalSimilarity = jaccardSimilarity(chunk.text, other.text);
-      }
-      
-      // Combinaison des métriques
-      const combinedSimilarity = settings.algorithms.useVectorSimilarity && settings.algorithms.useLexicalSimilarity
-        ? (vectorSimilarity * 0.7) + (lexicalSimilarity * 0.3)  // Pondération des similarités
-        : settings.algorithms.useVectorSimilarity
-          ? vectorSimilarity
-          : lexicalSimilarity;
-      
-      return combinedSimilarity > best.similarity
-        ? { 
-            chunk: other, 
-            similarity: combinedSimilarity,
-            lexicalSimilarity,
-            exactMatch: false
-          }
-        : best;
-    }, { 
-      chunk: null as AstraChunk | null, 
-      similarity: -1,
-      lexicalSimilarity: 0,
-      exactMatch: false
-    });
-
-    // Calcul du score de confiance si demandé
+  for (const chunk of chunks) {
+    const bestMatch = findBestMatch(chunk, doc2Chunks, exactMatchIndex, settings);
+    
     const confidence = settings.computeConfidence 
       ? calculateConfidenceScore(
           bestMatch.similarity, 
@@ -471,10 +466,9 @@ export async function compareDocumentChunks(
         )
       : undefined;
       
-    const match = bestMatch.chunk;
     const sim = bestMatch.similarity;
 
-    // Classification initiale basée sur la similarité
+    // Classification basée sur la similarité
     if (sim >= settings.thresholds.unchanged) {
       unchanged.push({
         chunkIndex: chunk.metadata.chunkIndex,
@@ -492,9 +486,8 @@ export async function compareDocumentChunks(
         similarity: sim,
         confidence,
         pageNumber: chunk.metadata.pageNumber,
-        // Si activé, générer un diff highlight
-        diffHighlight: settings.llm.enhanceModified && match 
-          ? generateDiffHighlight(chunk.text, match.text) 
+        diffHighlight: settings.llm.enhanceModified && bestMatch.chunk 
+          ? generateDiffHighlight(chunk.text, bestMatch.chunk.text) 
           : undefined
       });
     } else {
@@ -507,129 +500,236 @@ export async function compareDocumentChunks(
       });
     }
   }
+  
+  return { unchanged, modified, removed };
+}
 
-  // Trouver tous les chunks ajoutés du document 2 (pas de correspondance dans doc1)
-  for (const chunk of doc2Chunks) {
-    const isKnown = [...unchanged, ...modified].some(c => {
-      if (settings.algorithms.useExactMatching) {
-        return normalize(c.text) === normalize(chunk.text);
-      }
-      
-      return false;
-    });
-    
-    if (!isKnown) {
-      added.push({
-        chunkIndex: chunk.metadata.chunkIndex,
-        text: chunk.text,
-        status: 'added',
-        confidence: settings.computeConfidence ? 0.95 : undefined, // Haute confiance pour 'ajouté'
-        pageNumber: chunk.metadata.pageNumber
-      });
-    }
+/**
+ * Fonction principale de comparaison de documents avec pipeline hybride optimisé
+ */
+export async function compareDocumentChunks(
+  doc1ProcessingId: string,
+  doc2ProcessingId: string,
+  options: AdvancedCompareOptions = {}
+): Promise<ComparisonResult> {
+  if (!doc1ProcessingId || !doc2ProcessingId) {
+    throw new Error('Both processing IDs must be provided.');
+  }
+  
+  const startTime = Date.now();
+  const pipelineSteps: string[] = [];
+  
+  // Configuration optimisée
+  const settings = {
+    thresholds: {
+      unchanged: options.semanticSimilarityThreshold ?? 0.95,
+      modified: options.lexicalSimilarityThreshold ?? 0.7
+    },
+    algorithms: {
+      useVectorSimilarity: options.useVectorSimilarity ?? true,
+      useExactMatching: options.useExactMatching ?? true,
+      useLexicalSimilarity: options.useLexicalSimilarity ?? true
+    },
+    llm: {
+      use: options.useLLM ?? false,
+      confidenceThreshold: options.llmConfidenceThreshold ?? 0.8,
+      maxOperations: options.maxLLMOps ?? 10,
+      enhanceModified: options.enhanceModifiedChunks ?? false
+    },
+    computeConfidence: options.computeConfidenceScores ?? false,
+    batchSize: options.batchSize ?? 100
+  };
+  
+  pipelineSteps.push('Configuration optimisée du pipeline');
+  
+  await ensureCollection();
+  const collection = getCollection();
+  
+  // OPTION 1: Replace aggregate with separate find queries
+  pipelineSteps.push('Requête à la base de données');
+  
+  // Fetch documents for both processing IDs separately
+  const findOptions = { 
+    projection: { 
+      "$vector": 1 as const, 
+      "text": 1 as const, 
+      "metadata": 1 as const 
+    } 
+  };
+  
+  const [doc1Raw, doc2Raw] = await Promise.all([
+    collection.find({ 'metadata.processingId': doc1ProcessingId }, findOptions).toArray(),
+    collection.find({ 'metadata.processingId': doc2ProcessingId }, findOptions).toArray()
+  ]);
+
+  // Conversion des chunks
+  const doc1Chunks = doc1Raw.map(convertToAstraChunk).filter((c): c is AstraChunk => !!c);
+  const doc2Chunks = doc2Raw.map(convertToAstraChunk).filter((c): c is AstraChunk => !!c);
+
+  if (!doc1Chunks.length || !doc2Chunks.length) {
+    throw new Error('One or both documents have no valid chunks with vectors.');
   }
 
-  pipelineSteps.push('Classification initiale des chunks');
+  pipelineSteps.push(`Traitement des chunks (${doc1Chunks.length} vs ${doc2Chunks.length})`);
   
-  // Utilisation du LLM pour l'analyse des chunks modifiés avec confiance faible
+  // Création d'un index pour les correspondances exactes (O(1))
+  const exactMatchIndex = new Map<string, AstraChunk>();
+  doc2Chunks.forEach(chunk => {
+    if (chunk.metadata.chunkHash) {
+      exactMatchIndex.set(chunk.metadata.chunkHash, chunk);
+    }
+  });
+  
+  pipelineSteps.push('Index de correspondance exacte créé');
+
+  // Traitement par batches pour éviter la surcharge mémoire
+  const allUnchanged: ComparedChunk[] = [];
+  const allModified: ComparedChunk[] = [];
+  const allRemoved: ComparedChunk[] = [];
+  
+  const batchSize = settings.batchSize;
+  const numBatches = Math.ceil(doc1Chunks.length / batchSize);
+  
+  for (let i = 0; i < numBatches; i++) {
+    const startIdx = i * batchSize;
+    const endIdx = Math.min(startIdx + batchSize, doc1Chunks.length);
+    const batch = doc1Chunks.slice(startIdx, endIdx);
+    
+    const batchResults = await processBatch(batch, doc2Chunks, exactMatchIndex, settings);
+    
+    allUnchanged.push(...batchResults.unchanged);
+    allModified.push(...batchResults.modified);
+    allRemoved.push(...batchResults.removed);
+  }
+  
+  pipelineSteps.push(`Traitement par batches complété (${numBatches} batches)`);
+
+  // Détection des chunks ajoutés (optimisée)
+  const knownTexts = new Set([
+    ...allUnchanged.map(c => normalize(c.text)),
+    ...allModified.map(c => normalize(c.text))
+  ]);
+  
+  const added: ComparedChunk[] = doc2Chunks
+    .filter(chunk => !knownTexts.has(normalize(chunk.text)))
+    .map(chunk => ({
+      chunkIndex: chunk.metadata.chunkIndex,
+      text: chunk.text,
+      status: 'added' as const,
+      confidence: settings.computeConfidence ? 0.95 : undefined,
+      pageNumber: chunk.metadata.pageNumber
+    }));
+
+  pipelineSteps.push('Détection des chunks ajoutés');
+
+  // Analyse LLM optimisée (en parallèle avec limite)
   let llmEnhancedCount = 0;
   
-  if (settings.llm.use && modified.length > 0) {
+  if (settings.llm.use && allModified.length > 0) {
     pipelineSteps.push('Analyse LLM des chunks ambigus');
     
-    // Sélection des chunks à analyser par LLM (ceux avec faible confiance)
-    const llmCandidates = modified
+    const llmCandidates = allModified
       .filter(chunk => !chunk.confidence || chunk.confidence < settings.llm.confidenceThreshold)
       .slice(0, settings.llm.maxOperations);
       
-    console.log(`[LLM] Analyzing ${llmCandidates.length} ambiguous chunks`);
-    
-    // Analyse parallèle avec LLM
-    const llmAnalysisPromises = llmCandidates.map(async (chunk) => {
-      const correspondingChunk = doc2Chunks.find(c => 
-        cosineSimilarity(
-          doc1Chunks.find(d => d.metadata.chunkIndex === chunk.chunkIndex)!.$vector,
-          c.$vector
-        ) >= settings.thresholds.modified
-      );
-      
-      if (!correspondingChunk) return null;
-      
-      const analysis = await analyzeDiffWithLLM(
-        chunk.text,
-        correspondingChunk.text,
-        { similarity: chunk.similarity || 0 }
-      );
-      
-      return {
-        index: chunk.chunkIndex,
-        analysis: analysis.analysis,
-        status: analysis.status
-      };
-    });
-    
-    const llmResults = await Promise.all(llmAnalysisPromises);
-    
-    // Appliquer les résultats de l'analyse LLM
-    llmResults.forEach(result => {
-      if (!result) return;
-      
-      const chunkIndex = modified.findIndex(c => c.chunkIndex === result.index);
-      if (chunkIndex >= 0) {
-        const chunk = modified[chunkIndex];
+    if (llmCandidates.length > 0) {
+      // Traitement en parallèle avec Promise.all
+      const llmPromises = llmCandidates.map(async (chunk) => {
+        const correspondingChunk = doc2Chunks.find(c => 
+          cosineSimilarity(
+            doc1Chunks.find(d => d.metadata.chunkIndex === chunk.chunkIndex)!.$vector,
+            c.$vector
+          ) >= settings.thresholds.modified
+        );
         
-        // Mise à jour avec l'analyse LLM
-        chunk.llmAnalysis = result.analysis;
+        if (!correspondingChunk) return null;
         
-        // Reclassification si le LLM indique "unchanged"
-        if (result.status === 'unchanged') {
-          chunk.status = 'unchanged';
-          unchanged.push(chunk);
-          modified.splice(chunkIndex, 1);
+        try {
+          const analysis = await analyzeDiffWithLLM(
+            chunk.text,
+            correspondingChunk.text,
+            { similarity: chunk.similarity || 0 }
+          );
+          
+          return {
+            index: chunk.chunkIndex,
+            analysis: analysis.analysis,
+            status: analysis.status
+          };
+        } catch (error) {
+          console.warn(`LLM analysis failed for chunk ${chunk.chunkIndex}:`, error);
+          return null;
         }
+      });
+      
+      const llmResults = (await Promise.allSettled(llmPromises))
+        .map(result => result.status === 'fulfilled' ? result.value : null)
+        .filter(result => result !== null);
+      
+      // Application des résultats LLM
+      llmResults.forEach(result => {
+        if (!result) return;
         
-        llmEnhancedCount++;
-      }
-    });
+        const chunkIndex = allModified.findIndex(c => c.chunkIndex === result.index);
+        if (chunkIndex >= 0) {
+          const chunk = allModified[chunkIndex];
+          chunk.llmAnalysis = result.analysis;
+          
+          if (result.status === 'unchanged') {
+            chunk.status = 'unchanged';
+            allUnchanged.push(chunk);
+            allModified.splice(chunkIndex, 1);
+          }
+          
+          llmEnhancedCount++;
+        }
+      });
+    }
     
     pipelineSteps.push(`Analyse LLM complétée (${llmEnhancedCount} chunks)`);
   }
 
-  // Calcul des statistiques
+  // Statistiques finales
   const stats = {
     totalChunksDoc1: doc1Raw.length,
     totalChunksDoc2: doc2Raw.length,
     addedCount: added.length,
-    removedCount: removed.length,
-    unchangedCount: unchanged.length,
-    modifiedCount: modified.length,
-    vectorMissingCount:
-      doc1Raw.length - doc1Chunks.length +
-      doc2Raw.length - doc2Chunks.length,
+    removedCount: allRemoved.length,
+    unchangedCount: allUnchanged.length,
+    modifiedCount: allModified.length,
+    vectorMissingCount: doc1Raw.length - doc1Chunks.length + doc2Raw.length - doc2Chunks.length,
     llmEnhancedCount: llmEnhancedCount,
     averageConfidence: settings.computeConfidence 
-      ? [...added, ...removed, ...unchanged, ...modified]
+      ? [...added, ...allRemoved, ...allUnchanged, ...allModified]
           .reduce((sum, chunk) => sum + (chunk.confidence || 0), 0) / 
-          (added.length + removed.length + unchanged.length + modified.length)
+          (added.length + allRemoved.length + allUnchanged.length + allModified.length)
       : undefined
   };
 
-  // Fin du chronomètre
   const endTime = Date.now();
   const duration = endTime - startTime;
   
-  pipelineSteps.push(`Finalisation (${duration}ms)`);
+  pipelineSteps.push(`Finalisation optimisée (${duration}ms)`);
   
-  console.log(`[Compare Done] Added: ${stats.addedCount}, Removed: ${stats.removedCount}, Modified: ${stats.modifiedCount}, Unchanged: ${stats.unchangedCount}`);
-  if (llmEnhancedCount > 0) {
-    console.log(`[LLM Enhanced] ${llmEnhancedCount} chunks analyzed`);
+  console.log(`[Compare Optimisé] Durée: ${duration}ms | Ajoutés: ${stats.addedCount}, Supprimés: ${stats.removedCount}, Modifiés: ${stats.modifiedCount}, Inchangés: ${stats.unchangedCount}`);
+  
+  // Nettoyage du cache si nécessaire (éviter les fuites mémoire)
+  if (globalCache.vector.size > 10000) {
+    globalCache.vector.clear();
+    console.log('[Cache] Nettoyage du cache vectoriel');
+  }
+  
+  if (globalCache.lexical.size > 5000) {
+    globalCache.lexical.clear();
+    globalCache.tokenized.clear();
+    console.log('[Cache] Nettoyage du cache lexical');
   }
 
   return {
     added: added.sort((a, b) => a.chunkIndex - b.chunkIndex),
-    removed: removed.sort((a, b) => a.chunkIndex - b.chunkIndex),
-    unchanged: unchanged.sort((a, b) => a.chunkIndex - b.chunkIndex),
-    modified: modified.sort((a, b) => a.chunkIndex - b.chunkIndex),
+    removed: allRemoved.sort((a, b) => a.chunkIndex - b.chunkIndex),
+    unchanged: allUnchanged.sort((a, b) => a.chunkIndex - b.chunkIndex),
+    modified: allModified.sort((a, b) => a.chunkIndex - b.chunkIndex),
     statistics: stats,
     comparedProcessingIds: {
       doc1: doc1ProcessingId,
@@ -644,13 +744,12 @@ export async function compareDocumentChunks(
 }
 
 /**
- * Récupère les détails des chunks pour un document spécifique
+ * Récupère les détails des chunks pour un document spécifique (optimisé)
  */
 export async function getChunkComparisonDetails(processingId: string): Promise<AstraChunk[]> {
   await ensureCollection();
   const collection = getCollection();
 
-  // Projection pour la base de données
   const findOptions = { 
     projection: { 
       "$vector": 1 as const, 
@@ -661,7 +760,7 @@ export async function getChunkComparisonDetails(processingId: string): Promise<A
   
   const rawDocs = await collection
     .find({ 'metadata.processingId': processingId }, findOptions)
-    .toArray() as AstraDoc[];
+    .toArray();
 
   return rawDocs
     .map(convertToAstraChunk)

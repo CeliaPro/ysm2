@@ -1,4 +1,5 @@
-import { Prisma, ChatRole } from '@prisma/client'
+import { ChatRole } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 // Message related types
 export interface MessageMetadata {

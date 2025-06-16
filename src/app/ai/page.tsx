@@ -1,55 +1,88 @@
-// app/ai/page.tsx (or wherever your AiPage lives)
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useMemo } from 'react';
-import Image from 'next/image';
-import Navbar from '@/components/Navbar';
-import Sidebar from '@/components/Sidebar';
-import PromptBox from '@/components/promptBox';
-import Message from '@/components/Message';
-import CompareModal from '@/components/CompareModal';
-import assets from '@/app/assets/assets';
-import { useAuth } from '@/contexts/AuthContext';
-import { useAppContext } from '@/contexts/AppContext';
-import { useRouter } from 'next/navigation';
+import Image from "next/image";
+import assets from "../assets/assets";
+import Sidebar from "@/components/Sidebar";
+import Navbar from "@/components/Navbar";
+import { useEffect, useRef, useState, useMemo } from "react";
+import PromptBox from "@/components/promptBox";
+import Message from "@/components/Message";
+import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import CompareModal from "@/components/CompareModal";
 
-const AiPage: React.FC = () => {
+// Documents chip styled like AI modal, not green
+const DocumentsChip = ({ onClick }: { onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex items-center gap-1 bg-[#23272e] border border-gray-700 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm tracking-tight max-w-xs truncate hover:bg-[#22262c] transition"
+    style={{ outline: "none" }}
+  >
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className="mr-1 opacity-60">
+      <path d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 01-7.78-7.78l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.19 9.19a1.5 1.5 0 01-2.12-2.12l9.19-9.19"/>
+    </svg>
+    Documents
+  </button>
+);
+
+const AiPage = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { selectedConversation } = useAppContext();
   const [expand, setExpand] = useState(false);
-  const [openCompare, setOpenCompare] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [hasDocs, setHasDocs] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Use messages directly from selectedConversation, or fallback
-  const messages = useMemo(
-    () =>
-      selectedConversation?.messages?.map((msg) => ({
-        role: msg.role === 'USER' || msg.role === 'ASSISTANT' ? msg.role : 'USER',
-        content: msg.content,
-      })) || [],
+  const messages = useMemo(() =>
+    selectedConversation?.messages?.map((msg) => ({
+      role: msg.role === "USER" || msg.role === "ASSISTANT" ? msg.role : "USER",
+      content: msg.content,
+    })) ?? [],
     [selectedConversation]
   );
+  const noMessages = messages.length === 0;
 
+  // --- Protected: redirect if not auth
+  useEffect(() => {
+    if (!isAuthLoading && !user) router.push("/");
+  }, [isAuthLoading, user, router]);
+
+  // --- Detect if docs exist for conversation
+  useEffect(() => {
+    const fetchDocs = async () => {
+      if (!selectedConversation?.id) return setHasDocs(false);
+      try {
+        const res = await fetch(`/api/chat/getDocs?conversationId=${selectedConversation.id}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) setHasDocs(true);
+        else if (data?.data && Array.isArray(data.data) && data.data.length > 0) setHasDocs(true);
+        else setHasDocs(false);
+      } catch {
+        setHasDocs(false);
+      }
+    };
+    fetchDocs();
+  }, [selectedConversation?.id]);
+
+  // Auto-scroll
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTo({
         top: containerRef.current.scrollHeight,
-        behavior: 'smooth',
+        behavior: "smooth"
       });
     }
   }, [messages, isLoading]);
 
-  useEffect(() => {
-    if (!isAuthLoading && !user) {
-      router.push('/');
-    }
-  }, [isAuthLoading, user, router]);
-
-  // Scroll button logic
   const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Gérer la visibilité du bouton de scroll
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -64,14 +97,13 @@ const AiPage: React.FC = () => {
       handleScroll();
     });
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener("scroll", handleScroll);
     resizeObserver.observe(container);
 
-    // Initial check
     handleScroll();
 
     return () => {
-      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener("scroll", handleScroll);
       resizeObserver.disconnect();
     };
   }, [messages.length]);
@@ -81,50 +113,40 @@ const AiPage: React.FC = () => {
     if (container) {
       container.scrollTo({
         top: container.scrollHeight,
-        behavior: 'smooth',
+        behavior: "smooth",
       });
     }
   };
-
-  const noMessages = messages.length === 0;
 
   return (
     <div className="flex h-screen bg-[#292a2d] text-white transition-colors overflow-hidden">
       {/* Sidebar */}
       <Sidebar expand={expand} setExpand={setExpand} />
 
-      {/* Main chat column */}
       <div className="flex-1 flex flex-col h-screen min-h-0 bg-[#292a2d] text-white transition-colors relative">
         {/* Navbar */}
         <Navbar expand={expand} setExpand={setExpand} />
 
-        {/* Floating chat header with CompareModal */}
-        {selectedConversation?.title && (
-          <div className="fixed left-1/2 -translate-x-1/2 top-24 md:top-16 flex items-center gap-3 z-50
-                          bg-[#292a2d] px-4 py-2 rounded-lg shadow-md min-w-[280px]
-                          border border-gray-700/20"
+        {/* Floating header with Documents chip if docs exist */}
+        {selectedConversation?.title && hasDocs && (
+          <div
+            className="fixed left-1/2 -translate-x-1/2 top-16 flex items-center gap-3 z-50
+                        bg-[#23272e] px-4 py-2 rounded-xl shadow-lg border border-gray-700/30"
+            style={{ minWidth: 250, marginTop: 6 }}
           >
-            <p className="border border-transparent hover:border-gray-500/50 py-1 px-2 rounded-lg font-semibold truncate max-w-[200px]">
+            <p className="border border-transparent py-1 px-2 rounded-lg font-semibold truncate max-w-[180px]">
               {selectedConversation.title}
             </p>
-            <button
-              onClick={() => setOpenCompare(true)}
-              className="ml-2 px-3 py-1 rounded
-                         bg-blue-600 hover:bg-blue-500 text-white
-                         transition-colors text-xs font-semibold border border-[#555]"
-              type="button"
-            >
-              📎 Compare Documents
-            </button>
+            <DocumentsChip onClick={() => setOpen(true)} />
             <CompareModal
-              open={openCompare}
-              onClose={() => setOpenCompare(false)}
+              open={open}
+              onClose={() => setOpen(false)}
               conversationId={selectedConversation.id}
             />
           </div>
         )}
 
-        {/* Mobile Sidebar Toggle */}
+        {/* Mobile nav */}
         <div className="md:hidden absolute px-4 top-6 flex items-center justify-between w-full z-50">
           <Image
             onClick={() => setExpand((prev) => !prev)}
@@ -185,7 +207,7 @@ const AiPage: React.FC = () => {
           )}
         </div>
 
-        {/* Prompt box + Footer at the bottom */}
+        {/* Prompt box + Footer */}
         <div className="w-full flex flex-col items-center bg-[#292a2d] transition-colors">
           <div className="w-full max-w-2xl px-4 pb-2">
             <PromptBox isLoading={isLoading} setIsLoading={setIsLoading} />
@@ -195,7 +217,7 @@ const AiPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Bouton de scroll vers le bas */}
+        {/* Scroll to bottom button */}
         {showScrollButton && (
           <button
             onClick={scrollToBottom}
