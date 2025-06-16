@@ -68,7 +68,6 @@ export const POST = withAuthentication(async (req: NextRequest, user) => {
     // Vectorization logic (must support buffer)
     const result = await uploadDocumentFile({
       filePath: '', // Not needed if you support buffers, or adapt uploadDocumentFile
-      fileBuffer,
       fileName: doc.name,
       userId: user.id,
       conversationId,
